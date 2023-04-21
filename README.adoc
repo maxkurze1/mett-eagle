@@ -1,0 +1,5 @@
+= Mett-Eagle
+:author: Max Kurze
+:email: Max.Kurze@mailbox.tu-dresden.de
+
+Mett-Eagle is a Serverless platform to execute functions on top of the Fiasco.OC microkernel.

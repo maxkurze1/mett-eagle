@@ -1,0 +1,10 @@
+modaddr 0x01100000
+
+entry mett-eagle
+    kernel fiasco -serial_esc
+    roottask moe rom/mett-eagle.cfg
+    module l4re
+    module ned
+    module mett-eagle.cfg
+    module manager
+    module worker
