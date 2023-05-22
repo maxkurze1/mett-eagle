@@ -1,6 +1,6 @@
-PKGDIR	?= .
-L4DIR	?= $(PKGDIR)/../..
+PKGDIR  = .
+L4DIR  ?= $(PKGDIR)/../..
 
-TARGET = manager worker
+TARGET  = manager worker
 
 include $(L4DIR)/mk/subdir.mk
