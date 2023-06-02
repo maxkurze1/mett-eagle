@@ -18,22 +18,6 @@ using L4Re::chksys;
 using L4Re::Dataspace;
 using L4Re::Util::cap_alloc;
 
-#if 0
-static Slab_alloc<App_task> *alloc()
-{
-  static Slab_alloc<App_task> a;
-  return &a;
-}
-#endif
-
-#if 0
-void *App_task::operator new (size_t) noexcept
-{ return alloc()->alloc(); }
-
-void App_task::operator delete (void *m) noexcept
-{ alloc()->free((App_task*)m); }
-#endif
-
 int
 App_task::op_signal (L4Re::Parent::Rights, unsigned long sig,
                      unsigned long val)
@@ -69,7 +53,7 @@ App_task::op_signal (L4Re::Parent::Rights, unsigned long sig,
   return L4_EOK;
 }
 
-App_task::App_task (Mett_Eagle::Registry *r,
+App_task::App_task (L4Re::Util::Object_registry *r,
                     L4Re::Util::Ref_cap<L4::Factory>::Cap const &alloc)
     : _ref_cnt (0), _r (r),
       _task (chkcap (cap_alloc.alloc<L4::Task> (), "allocating task cap")),

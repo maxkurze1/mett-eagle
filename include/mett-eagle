@@ -1,0 +1,18 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+
+#pragma once
+
+#include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_iface>
+
+/**
+ * This is the interface used by clients of the
+ * Mett-Eagle manager to invoke Serverless functions.
+*/
+struct MettEagle : L4::Kobject_t<MettEagle, L4::Kobject>
+{
+  L4_INLINE_RPC(l4_msgtag_t, invoke, (L4::Ipc::String<> name, l4_uint32_t *res));
+  // L4_INLINE_RPC(int, neg, (l4_uint32_t a, l4_uint32_t *res));
+  typedef L4::Typeid::Rpcs<invoke_t> Rpcs;
+};

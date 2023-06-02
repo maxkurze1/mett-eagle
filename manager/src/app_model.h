@@ -16,12 +16,6 @@
 #include <l4/libloader/loader>
 #include <l4/libloader/remote_app_model>
 
-#if 0
-namespace Ldr {
-class Script;
-};
-#endif
-
 struct App_model : public Ldr::Base_app_model<Stack>
 {
   enum Prios

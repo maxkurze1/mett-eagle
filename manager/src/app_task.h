@@ -18,8 +18,11 @@
 #include "server.h"
 #include <l4/sys/cxx/ipc_epiface>
 
+/**
+ * Implementation of the Server_object interface
+ */
 class App_task
-    : public L4::Epiface_t<App_task, L4Re::Parent, Mett_Eagle::Server_object>
+    : public L4::Epiface_t<App_task, L4Re::Parent, Server_object>
 {
 private:
   long _ref_cnt;
@@ -53,7 +56,7 @@ private:
   template <typename T> using Unique_del_cap = L4Re::Util::Unique_del_cap<T>;
   template <typename T> using Unique_cap = L4Re::Util::Unique_cap<T>;
 
-  Mett_Eagle::Registry *_r;
+  L4Re::Util::Object_registry *_r;
 
   Unique_del_cap<L4::Task> _task;
   Unique_del_cap<L4::Thread> _thread;
@@ -91,7 +94,7 @@ public:
     add_ref ();
   }
 
-  App_task (Mett_Eagle::Registry *r,
+  App_task (L4Re::Util::Object_registry *r,
             L4Re::Util::Ref_cap<L4::Factory>::Cap const &alloc);
 
   // L4::Cap<L4Re::Mem_alloc> allocator() const { return _ma; }

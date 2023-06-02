@@ -10,51 +10,40 @@
 
 #include <cstdio>
 #include <l4/cxx/exceptions>
+#include <l4/re/util/br_manager>
 #include <l4/re/util/object_registry>
 #include <l4/sys/cxx/ipc_epiface>
 #include <pthread.h>
 
-namespace Mett_Eagle
-{
-
+/**
+ * This interface can be used by spawned
+ * processes to communicate with the manager?
+ */
 class Server_object : public L4::Epiface
 {
 };
 
-class Registry : public L4Re::Util::Object_registry
-{
-public:
-  Registry (L4::Ipc_svr::Server_iface *sif, L4::Cap<L4::Thread> t,
-            L4::Cap<L4::Factory> f)
-      : L4Re::Util::Object_registry (sif, t, f)
-  {
-  }
+// class Server : public L4::Server<>
+// {
+// private:
+//   L4Re::Util::Object_registry *_r;
+//   pthread_t _th;
+//   pthread_mutex_t _start_mutex;
+//   static void *__run (void *);
 
-  ~Registry () { printf ("destroy registry\n"); }
-};
+//   void run ();
 
-class Server : public L4::Server<>
-{
-private:
-  Registry *_r;
-  pthread_t _th;
-  pthread_mutex_t _start_mutex;
-  static void *__run (void *);
+// public:
+//   typedef L4::Server<> Base;
 
-  void run ();
+//   Server ();
 
-public:
-  typedef L4::Server<> Base;
+//   L4Re::Util::Object_registry *
+//   registry ()
+//   {
+//     return _r;
+//   }
+// };
 
-  Server ();
-
-  Registry *
-  registry ()
-  {
-    return _r;
-  }
-};
-
-extern Server *server;
-
-}
+// extern Server *server;
+extern L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> server;

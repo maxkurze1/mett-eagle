@@ -8,3 +8,4 @@ entry mett-eagle
     module mett-eagle.cfg
     module manager
     module worker
+    module client
