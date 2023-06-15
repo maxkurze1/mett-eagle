@@ -6,6 +6,6 @@ entry mett-eagle
     module l4re
     module ned
     module mett-eagle.cfg
-    module manager
-    module worker
-    module client
+    module function1
+    module mett-eagle
+    module mett-eagle-client

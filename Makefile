@@ -1,6 +1,3 @@
-PKGDIR  = .
-L4DIR  ?= $(PKGDIR)/../..
+L4DIR  ?= ../..
 
-TARGET  = manager worker client include
-
-include $(L4DIR)/mk/subdir.mk
+include $(L4DIR)/mk/project.mk

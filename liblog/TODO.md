@@ -1,0 +1,3 @@
+- Implement some kind of mask for certain processes / threads
+- configuration
+- fix time output

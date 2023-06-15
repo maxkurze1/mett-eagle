@@ -1,0 +1,40 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * \file
+ * The mett-eagle client interface.
+ *
+ * This interface will by used by the manager to answer clients.
+ */
+
+#pragma once
+
+#include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_iface>
+
+namespace MettEagle
+{
+
+/**
+ * @brief Interface provided by the client for the manager
+ *
+ * This is the interface that the client will pass to the
+ * manager on register. It will be used by the manager to
+ * inform the client e.g. if an action is done.
+ *
+ */
+struct Client : L4::Kobject_t<Client, L4::Kobject>
+{
+  /**
+   * @brief Answer of a serverless function.
+   *
+   * @return      L4_EOK on success or a negative error value
+   *
+   * TODO server shouldn't block if client is not ready!!
+   */
+  L4_INLINE_RPC (l4_msgtag_t, answer, (L4::Ipc::String<> name));
+
+  typedef L4::Typeid::Rpcs<answer_t> Rpcs;
+};
+
+}

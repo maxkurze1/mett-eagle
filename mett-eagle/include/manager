@@ -1,0 +1,158 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * \file
+ * The mett-eagle manager interface.
+ *
+ * This interface will by used by the client to communicate with the server
+ * process.
+ *
+ * \includefile{l4/mett-eagle/mett-eagle}
+ */
+
+#pragma once
+
+#include <l4/liblog/log>
+#include <l4/mett-eagle/client>
+#include <l4/re/dataspace>
+#include <l4/re/parent>
+#include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_iface>
+#include <l4/sys/cxx/ipc_types>
+#include <map>
+#include <string>
+
+namespace MettEagle
+{
+
+/**
+ * @brief Part of the interface that will be shared by clients and workers
+ */
+struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject>
+{
+  /**
+   * @brief Invoke a serverless function
+   *
+   * @note This function can be called by clients and workers.
+   * @note The action namespace will only be shared among clients and their
+   *       started functions. So a worker wont be able to invoke a function of
+   *       another client.
+   *
+   * @param[in] name  Name of the serverless function to invoke
+   * @param[out] res  Result of the function
+   * @return          L4_EOK on success or a negative error value
+   */
+  L4_INLINE_RPC (l4_msgtag_t, action_invoke,
+                 (L4::Ipc::String<> name)/* , */
+                 /* L4::Ipc::Send_only */);
+
+  typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
+};
+
+/**
+ * @brief Interface provided to clients
+ *
+ * This interface will provide additional functionality only available to
+ * clients.
+ *
+ * @note The clients will receive this interface via the
+ * MettEagleRegistry#register_client method.
+ */
+struct Manager_Client
+    : L4::Kobject_t<Manager_Client, Manager_Base, L4::PROTO_ANY,
+                           L4::Type_info::Demand_t<1> >
+// PROTO_ANY is the default protocol value
+// It is necessary to declare the Demand_t<1> to receive the file capability
+// it is also necessary to use the Br_manager to allocate the needed receive
+// capability
+{
+  /**
+   * @brief Create a new 'action'
+   *
+   * This will create a new action with the content of the file.
+   *
+   * @note This requires S-permissions and is therefore not allowed by worker
+   * processes. TODO ensure workers only have rw
+   *
+   * @param[in] name  Name that will identify the action
+   * @param[in] file  Dataspace capability representing the binary file
+   * @return          L4_EOK on success
+   * @return          -L4_ENOENT if the given pathname does not exist
+   *                  inside the Env_nv
+   */
+  L4_INLINE_RPC (l4_msgtag_t, action_create,
+                 (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file));
+
+  typedef L4::Typeid::Rpcs<action_create_t> Rpcs;
+};
+
+/**
+ * @brief Interface provided to workers
+ *
+ * This interface will provide additional functionality only available to
+ * workers. It also inherits the L4Re::Parent interface to be passed as the
+ * L4Re::Env::env()->parent() and provides a custom exit function.
+ */
+class Manager_Worker
+    : public L4::Kobject_2t<Manager_Worker, Manager_Base, L4Re::Parent>
+{
+public:
+  /**
+   * @brief Exit worker and return string
+   *
+   * @note This function can be called by workers to tell the manger
+   * to delete the process and hand the returned string back to the
+   * client.
+   *
+   * @param[in] value  Exit value of the serverless function
+   * @return           L4_EOK on success or a negative error value
+   */
+  L4_INLINE_RPC (l4_msgtag_t, exit, (L4::Ipc::String<> value));
+
+  typedef L4::Typeid::Rpcs<exit_t> Rpcs;
+};
+
+/**
+ * @brief Interface to register a new client
+ *
+ * This interface can be used by clients to register themselves
+ * and get access to an IPC gate with the real MettEagle interface.
+ */
+class Manager_Registry
+    : public L4::Kobject_t<Manager_Registry, L4::Kobject, L4::PROTO_ANY,
+                           L4::Type_info::Demand_t<1> >
+// PROTO_ANY is the default protocol value
+// It is necessary to declare the Demand_t<1> to receive the client capability
+// it is also necessary to use the Br_manager to allocate the needed receive
+// capability
+{
+public:
+  /**
+   * @brief Register a new client.
+   *
+   * This method will send an Ipc_gate from a new client to the manager. This
+   * gate will be used to answer requests of this specific client.
+   *
+   * The server will reply with a newly created Ipc_gate which should be used
+   * by the client for all subsequent requests. This is necessary for the
+   * manager to identify which message came from which client and where to send
+   * the reply.
+   *
+   * @param[in]  client_ipc_gate   Client Ipc_gate that the manager will call
+   *                               (e.g. if an action finished)
+   * @param[out] manager_ipc_gate  Manager Ipc_gate that should be used for all
+   *                               subsequent interaction
+   * @return                       L4_EOK on success
+   * @return                       -L4_EINVAL if the received capability is
+   *                               invalid
+   * @return                       -L4_ENOMEM if no new capability could be
+   *                               allocated
+   */
+  L4_INLINE_RPC (l4_msgtag_t, register_client,
+                 (L4::Ipc::Cap<Client> client_ipc_gate,
+                  L4::Ipc::Out<L4::Cap<Manager_Client> > manager_ipc_gate));
+
+  typedef L4::Typeid::Rpcs<register_client_t> Rpcs;
+};
+
+}

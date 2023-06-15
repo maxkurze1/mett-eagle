@@ -1,0 +1,152 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+
+#include <l4/liblog/log>
+#include <l4/mett-eagle/client>
+#include <l4/mett-eagle/manager>
+#include <l4/re/error_helper>
+#include <l4/re/util/object_registry>
+#include <l4/sys/cxx/ipc_epiface>
+
+namespace MettEagle
+{
+
+struct Client_epiface : public L4::Epiface_t<Client_epiface, Client>
+{
+  long
+  op_answer (Client::Rights, const L4::Ipc::String_in_buf<> &answer)
+  {
+    log_debug ("Got answer! %s", answer.data);
+    return L4_EOK;
+  }
+};
+
+/**
+ * A server implementation to wait for single ipc invocation
+ */
+// L4::Ipc_svr::Br_manager_no_buffers server_interface;
+template <typename LOOP_HOOKS = L4::Ipc_svr::Default_loop_hooks>
+class Single_server : public L4::Server<LOOP_HOOKS>
+{
+  typedef L4::Server<LOOP_HOOKS> Base;
+
+protected:
+  template <typename DISPATCH>
+  inline void
+  internal_wait (DISPATCH dispatch, l4_utcb_t *utcb)
+  {
+    l4_msgtag_t res;
+    l4_umword_t p;
+    l4_msgtag_t r = l4_msgtag (-L4_ENOREPLY, 0, 0, 0);
+
+    res = Base::reply_n_wait (r, &p, utcb);
+    if (res.has_error ())
+      {
+        this->error (res, utcb);
+        return;
+      }
+    r = dispatch (res, p, utcb);
+  }
+
+public:
+#ifdef __EXCEPTIONS
+  /**
+   * Server loop with internal exception handling.
+   *
+   * This server loop translates L4::Runtime_error exceptions
+   * into negative error return codes sent to the caller.
+   */
+  template <typename EXC, typename R>
+  inline void
+  wait (R r, l4_utcb_t *u = l4_utcb ())
+  {
+    internal_wait (L4::Ipc_svr::Exc_dispatch<R, EXC> (r), u);
+  }
+#endif
+
+  /**
+   * Single receive without exception handling.
+   */
+  template <typename R>
+  inline void
+  wait_noexc (R r, l4_utcb_t *u = l4_utcb ())
+  {
+    internal_wait (L4::Ipc_svr::Direct_dispatch<R> (r), u);
+  }
+};
+
+static Single_server<> &
+getServer ()
+{
+  static Single_server<> server;
+  return server;
+}
+
+static L4Re::Util::Object_registry *
+getRegistry ()
+{
+  static L4Re::Util::Object_registry reg{ &getServer () };
+  return &reg;
+}
+
+static L4::Cap<MettEagle::Manager_Client>
+getManagerCapability ()
+{
+  static auto manager{ L4Re::chkcap (
+      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
+      "allocate manager capability") };
+  return manager;
+}
+
+/**
+ * @brief Get the Manager capability as client
+ *
+ * This method can be invoked by the client to register itself and get the
+ * capability that can be usstatic L4::Cap<MettEagle::Manager>ed to talk to the
+ * MettEagle manager.
+ *
+ * @param cap_name            Name of the capability from the
+ *                            MettEagle::ManagerRegistry
+ * @return MettEagle::Manager Capability to a Manager Ipc_Gate
+ */
+static L4::Cap<MettEagle::Manager_Client>
+getManager (const char *const cap_name)
+{
+  static Client_epiface client_epiface;
+  auto reg = getRegistry ();
+  /* get the registry */
+  auto manager_registry = L4Re::chkcap (
+      L4Re::Env::env ()->get_cap<MettEagle::Manager_Registry> (cap_name),
+      "Couldn't get manager_registry capability");
+  /* register own epiface to receive delayed answers */
+  L4Re::chkcap (reg->register_obj (&client_epiface),
+                "Couldn't register IPC gate");
+  auto manager = getManagerCapability ();
+  L4Re::chksys (
+      manager_registry->register_client (client_epiface.obj_cap (), manager),
+      "register_client");
+  return manager;
+}
+
+static void
+invoke (const char *const name)
+{
+  auto manager = getManagerCapability ();
+
+  // here it is necessary to do an atomic send and wait
+  // the server will not block on send to prevent client attacks
+  // therefore the client has to be ready to receive the answer immediately
+  // else we might miss it and block forever.
+  // l4_ipc_send_and_wait();
+  L4Re::chksys (manager->action_invoke (name), "action_invoke");
+  getServer ().wait<L4::Runtime_error, L4Re::Util::Object_registry &> (
+      *getRegistry ());
+}
+
+L4::Cap<L4Re::Dataspace> inline static open_file (const char *const pathname)
+{
+  return L4Re::chkcap (L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname),
+                       "Couldn't find file");
+}
+
+}
