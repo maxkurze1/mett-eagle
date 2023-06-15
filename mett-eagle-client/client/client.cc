@@ -15,6 +15,9 @@
 #include <l4/sys/ipc_gate>
 #include <stdio.h>
 
+#include <time.h>
+#include <unistd.h>
+
 
 // L4Re::Util::Object_registry registry{ &server_interface };
 
@@ -25,25 +28,6 @@ try
     (void)_argc;
     (void)_argv;
 
-    /* the capability used to register this client at the server */
-    // L4::Cap<MettEagle::ManagerRegistry> manager_registry = L4Re::chkcap (
-    //     L4Re::Env::env ()->get_cap<MettEagle::ManagerRegistry> ("manager"),
-    //     "Couldn't get manager registry capability");
-
-    // /**
-    //  * Send ipc gate to the mett-eagle server and get one back.
-    //  */
-    // L4::Cap<MettEagle::Manager> manager
-    //     = L4Re::chkcap (L4Re::Util::cap_alloc.alloc<MettEagle::Manager> (),
-    //                     "allocate manager capability");
-
-    // L4Re::chkcap (reg.registry ()->register_obj (&client_epiface),
-    //               "Couldn't register IPC gate");
-
-    // log_debug ("Registered IPC gate %d",
-    //            client_epiface.obj_cap ().is_valid ());
-    // L4Re::chksys (manager_registry->register_client (client_epiface.obj_cap (), manager),
-    //               "register_client");
     auto manager = MettEagle::getManager("manager");
 
     log_debug ("Register done");
@@ -62,5 +46,5 @@ try
 catch (L4::Runtime_error &e)
   {
     log_fatal (e);
-    return EXIT_FAILURE;
+    return e.err_no();
   }

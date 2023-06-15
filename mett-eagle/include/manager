@@ -1,13 +1,21 @@
 // -*- Mode: C++ -*-
 // vim:ft=cpp
 /**
- * \file
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
+/**
+ * @file
+ *
  * The mett-eagle manager interface.
  *
  * This interface will by used by the client to communicate with the server
  * process.
  *
- * \includefile{l4/mett-eagle/mett-eagle}
+ * @headerfile <l4/mett-eagle/manager>
  */
 
 #pragma once
@@ -25,10 +33,22 @@
 namespace MettEagle
 {
 
+/* client and worker cannot use the same protocol value as base *
+ * because they are derived from base.                          */
+enum Protocol
+{
+  // clang-format off
+  PROTO_MANAGER_BASE     = 0x5000,
+  PROTO_MANAGER_CLIENT   = 0x5001,
+  PROTO_MANAGER_WORKER   = 0x5002,
+  PROTO_MANAGER_REGISTRY = 0x5003,
+  //clang-format on
+};
+
 /**
  * @brief Part of the interface that will be shared by clients and workers
  */
-struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject>
+struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BASE>
 {
   /**
    * @brief Invoke a serverless function
@@ -42,8 +62,7 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject>
    * @param[out] res  Result of the function
    * @return          L4_EOK on success or a negative error value
    */
-  L4_INLINE_RPC (l4_msgtag_t, action_invoke,
-                 (L4::Ipc::String<> name)/* , */
+  L4_INLINE_RPC (l4_msgtag_t, action_invoke, (L4::Ipc::String<> name) /* , */
                  /* L4::Ipc::Send_only */);
 
   typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
@@ -59,9 +78,8 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject>
  * MettEagleRegistry#register_client method.
  */
 struct Manager_Client
-    : L4::Kobject_t<Manager_Client, Manager_Base, L4::PROTO_ANY,
-                           L4::Type_info::Demand_t<1> >
-// PROTO_ANY is the default protocol value
+    : L4::Kobject_t<Manager_Client, Manager_Base, PROTO_MANAGER_CLIENT,
+                     L4::Type_info::Demand_t<1> >
 // It is necessary to declare the Demand_t<1> to receive the file capability
 // it is also necessary to use the Br_manager to allocate the needed receive
 // capability
@@ -69,10 +87,7 @@ struct Manager_Client
   /**
    * @brief Create a new 'action'
    *
-   * This will create a new action with the content of the file.
-   *
-   * @note This requires S-permissions and is therefore not allowed by worker
-   * processes. TODO ensure workers only have rw
+   * This will create a new action with the contents of the file.
    *
    * @param[in] name  Name that will identify the action
    * @param[in] file  Dataspace capability representing the binary file
@@ -90,18 +105,17 @@ struct Manager_Client
  * @brief Interface provided to workers
  *
  * This interface will provide additional functionality only available to
- * workers. It also inherits the L4Re::Parent interface to be passed as the
- * L4Re::Env::env()->parent() and provides a custom exit function.
+ * workers (e.g. a custom exit function). It also inherits the L4Re::Parent
+ * interface to be passed as the L4Re::Env::env()->parent().
  */
-class Manager_Worker
-    : public L4::Kobject_2t<Manager_Worker, Manager_Base, L4Re::Parent>
+struct Manager_Worker
+    : L4::Kobject_2t<Manager_Worker, Manager_Base, L4Re::Parent, PROTO_MANAGER_WORKER>
 {
-public:
   /**
    * @brief Exit worker and return string
    *
    * @note This function can be called by workers to tell the manger
-   * to delete the process and hand the returned string back to the
+   * to delete their process and hand the returned string back to the
    * client.
    *
    * @param[in] value  Exit value of the serverless function
@@ -116,12 +130,11 @@ public:
  * @brief Interface to register a new client
  *
  * This interface can be used by clients to register themselves
- * and get access to an IPC gate with the real MettEagle interface.
+ * and get access to an IPC gate with the real Manager interface.
  */
-class Manager_Registry
-    : public L4::Kobject_t<Manager_Registry, L4::Kobject, L4::PROTO_ANY,
-                           L4::Type_info::Demand_t<1> >
-// PROTO_ANY is the default protocol value
+struct Manager_Registry
+    : L4::Kobject_t<Manager_Registry, L4::Kobject, PROTO_MANAGER_REGISTRY,
+                    L4::Type_info::Demand_t<1> >
 // It is necessary to declare the Demand_t<1> to receive the client capability
 // it is also necessary to use the Br_manager to allocate the needed receive
 // capability

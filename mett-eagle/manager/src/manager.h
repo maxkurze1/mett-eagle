@@ -24,43 +24,41 @@ extern std::map<L4::Cap<MettEagle::Manager_Base>, L4::Cap<MettEagle::Client> >
     gate_to_client;
 
 #include <memory>
+#include <l4/sys/cxx/ipc_epiface>
 
 /**
  * Implementation of the base interface.
  * These functions will be called by both clients and workers.
  */
-// class Manager_Base_Epiface : public L4::Epiface
-// {
-// protected:
-//   /**
-//    * @brief Per client name for dataspace resolution
-//    *
-//    * This map will hold all registered actions of a client and also provide
-//    * them to the workers started by this specific client only.
-//    */
-//   std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > > _actions;
-
-// public:
-//   /**
-//    * @brief Invoke a serverless function
-//    *
-//    * @param[in] name  Name of the serverless function to invoke
-//    * @param[out] res  Result of the function
-//    * @return          L4_EOK on success
-//    * @return          -L4_EINVAL if the L4Re::Dataspace of the action is no
-//    *                  longer valid
-//    */
-//   long op_action_invoke (MettEagle::Manager_Base::Rights,
-//                          const L4::Ipc::String_in_buf<> &name,
-//                          l4_uint32_t &res);
-// };
-
-class Manager_Client_Epiface
-    : public L4::Epiface_t<Manager_Client_Epiface, MettEagle::Manager_Client>
+struct Manager_Base_Epiface : L4::Epiface_t0<MettEagle::Manager_Base>
 {
-public:
+protected:
+  /**
+   * @brief Per client name for dataspace resolution
+   *
+   * This map will hold all registered actions of a client and also provide
+   * them to the workers started by this specific client only.
+   */
   std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > > _actions;
 
+public:
+  /**
+   * @brief Invoke a serverless function
+   *
+   * @param[in] name  Name of the serverless function to invoke
+   * @param[out] res  Result of the function
+   * @return          L4_EOK on success
+   * @return          -L4_EINVAL if the L4Re::Dataspace of the action is no
+   *                  longer valid
+   */
+  long op_action_invoke (MettEagle::Manager_Base::Rights,
+                         const L4::Ipc::String_in_buf<> &name);
+};
+
+struct Manager_Client_Epiface
+    : L4::Epiface_t<Manager_Client_Epiface, MettEagle::Manager_Client,
+                    Manager_Base_Epiface>
+{
   Manager_Client_Epiface ()
   {
     /* _actions map will be create by the clients constructor and only passed
@@ -69,7 +67,6 @@ public:
         std::map<std::string, L4::Cap<L4Re::Dataspace> > > ();
   }
 
-public:
   /**
    * @brief Create a new 'action'
    *
@@ -87,38 +84,18 @@ public:
   long op_action_create (MettEagle::Manager_Client::Rights,
                          const L4::Ipc::String_in_buf<> &name,
                          L4::Ipc::Snd_fpage file);
-
-  long
-  op_action_invoke (MettEagle::Manager_Base::Rights,
-                    const L4::Ipc::String_in_buf<> &name)
-  {
-    log_info ("test action invoke");
-    return 0;
-  }
 };
 
-class Manager_Worker_Epiface
-    : public L4::Epiface_t<Manager_Worker_Epiface, MettEagle::Manager_Worker/* , */
-                           /* Manager_Base_Epiface */>
+struct Manager_Worker_Epiface
+    : L4::Epiface_t<Manager_Worker_Epiface, MettEagle::Manager_Worker,
+                    Manager_Base_Epiface>
 {
-public:
-  std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > > _actions;
   Manager_Worker_Epiface (
       std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > >
           actions)
   {
     /* passed actions map from the client */
     _actions = actions;
-  }
-
-public:
-
-  long
-  op_action_invoke (MettEagle::Manager_Base::Rights,
-                    const L4::Ipc::String_in_buf<> &name)
-  {
-    log_info ("test action invoke");
-    return 0;
   }
 
   /**
@@ -157,11 +134,9 @@ public:
  * use to register themselves.
  * Also creating a global object which will be 'passed' to the clients.
  */
-class Manager_Registry_Epiface
-    : public L4::Epiface_t<Manager_Registry_Epiface,
-                           MettEagle::Manager_Registry>
+struct Manager_Registry_Epiface
+    : L4::Epiface_t<Manager_Registry_Epiface, MettEagle::Manager_Registry>
 {
-public:
   /**
    * @brief Register a new client.
    *

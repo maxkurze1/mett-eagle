@@ -1,5 +1,12 @@
 // -*- Mode: C++ -*-
 // vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
 
 #include <l4/liblog/log>
 #include <l4/mett-eagle/client>
@@ -138,7 +145,7 @@ invoke (const char *const name)
   // therefore the client has to be ready to receive the answer immediately
   // else we might miss it and block forever.
   // l4_ipc_send_and_wait();
-  L4Re::chksys (manager->action_invoke (name), "action_invoke");
+  L4Re::chksys (manager->action_invoke(name), "action_invoke");
   getServer ().wait<L4::Runtime_error, L4Re::Util::Object_registry &> (
       *getRegistry ());
 }

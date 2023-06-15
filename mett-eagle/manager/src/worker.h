@@ -140,7 +140,7 @@ public:
    * main of the executed program.
    *
    * Example:
-   * @code
+   * @code{.cpp}
    * add_argv_string ("hello");
    * @endcode
    */
@@ -155,7 +155,7 @@ public:
    * main of the executed program.
    *
    * Example:
-   * @code
+   * @code{.cpp}
    * const char *third_param  = "third";
    * set_argv_strings ({ "hello", "world", third_param });
    * @endcode
@@ -203,7 +203,7 @@ public:
    * WARNING: Do not confuse this environment with the L4Re::env !
    *
    * Example:
-   * @code
+   * @code{.cpp}
    * add_envp_string ("LOG_LEVEL=info");
    * @endcode
    */
@@ -218,7 +218,7 @@ public:
    * WARNING: Do not confuse this environment with the L4Re::env !
    *
    * Example:
-   * @code
+   * @code{.cpp}
    * set_envp_strings ({ "LOG_LEVEL=info", "PKGNAME=Worker" });
    * @endcode
    */

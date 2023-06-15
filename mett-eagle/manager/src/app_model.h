@@ -146,8 +146,7 @@ struct App_model : public Ldr::Base_app_model<Stack>
       return t;
 
     if (!(cpus.map & sp.affinity.map))
-      log_warn (
-          "warning: Launching thread on offline CPU. Thread may never run!");
+      log_warn ("warning: Launching thread on offline CPU. Thread may never run!");
 
     return scheduler->run_thread (thread, sp);
   }

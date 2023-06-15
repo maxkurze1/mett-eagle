@@ -1,6 +1,6 @@
 #include <cstdlib>
-#include <l4/liblog/log>
 #include <ctime>
+#include <l4/liblog/log>
 
 Log::Level Log::_level;
 
@@ -26,21 +26,22 @@ Log::put_severity (MsgLevel msg_lvl, FILE *output)
 int
 Log::put_time (FILE *output)
 {
-  // TODO this somehow doesn't work
-  time_t now = time (0);
-  tm *tm = localtime (&now);
-  char buffer[6]; // always adjust buffer size when changing output format!!
-  strftime (buffer, sizeof (buffer), "%H:%M", tm);
-  return fprintf (output, "%s", buffer);
+
+  struct timespec ts;
+  if (clock_gettime (CLOCK_REALTIME, &ts))
+    return 0;
+
+  // int minutes = ts.tv_sec / 60;
+  // int seconds = ts.tv_sec % 60;
+  // print sec : usec per default
+  return fprintf (output, "%02ld:%03ld", ts.tv_sec, ts.tv_nsec / 1000000);
 }
 
 int
 Log::put_pkgname (FILE *output)
 {
   const char *const name = getenv ("PKGNAME");
-  if (name)
-    {
-      return fputs(name, output);
-    }
-  return -L4_ENOENT;
+  if (name == NULL)
+    return 0;
+  return fputs (name, output);
 }
