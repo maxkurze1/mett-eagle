@@ -9,11 +9,7 @@
  */
 /**
  * @file
- *
- * The mett-eagle manager interface.
- *
- * This interface will by used by the client to communicate with the server
- * process.
+ * The mett-eagle manager interfaces.
  *
  * @headerfile <l4/mett-eagle/manager>
  */
@@ -29,6 +25,9 @@
 #include <l4/sys/cxx/ipc_types>
 #include <map>
 #include <string>
+
+namespace L4Re
+{
 
 namespace MettEagle
 {
@@ -59,11 +58,12 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BAS
    *       another client.
    *
    * @param[in] name  Name of the serverless function to invoke
-   * @param[out] res  Result of the function
-   * @return          L4_EOK on success or a negative error value
+   * @return          L4_EOK on success
+   * @return          -L4_EINVAL if the L4Re::Dataspace of the action is no
+   *                  longer valid
    */
-  L4_INLINE_RPC (l4_msgtag_t, action_invoke, (L4::Ipc::String<> name) /* , */
-                 /* L4::Ipc::Send_only */);
+  L4_INLINE_RPC (l4_msgtag_t, action_invoke, (L4::Ipc::String<> name),
+                 L4::Ipc::Send_only);
 
   typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
 };
@@ -74,8 +74,7 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BAS
  * This interface will provide additional functionality only available to
  * clients.
  *
- * @note The clients will receive this interface via the
- * MettEagleRegistry#register_client method.
+ * @note The clients will receive this interface via the manager registry.
  */
 struct Manager_Client
     : L4::Kobject_t<Manager_Client, Manager_Base, PROTO_MANAGER_CLIENT,
@@ -92,8 +91,8 @@ struct Manager_Client
    * @param[in] name  Name that will identify the action
    * @param[in] file  Dataspace capability representing the binary file
    * @return          L4_EOK on success
-   * @return          -L4_ENOENT if the given pathname does not exist
-   *                  inside the Env_nv
+   * @return          -L4_EINVAL if no capability was received
+   * @return          -L4_ENOMEM if no server ipc gate could be allocated
    */
   L4_INLINE_RPC (l4_msgtag_t, action_create,
                  (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file));
@@ -106,13 +105,13 @@ struct Manager_Client
  *
  * This interface will provide additional functionality only available to
  * workers (e.g. a custom exit function). It also inherits the L4Re::Parent
- * interface to be passed as the L4Re::Env::env()->parent().
+ * interface and will be passed as the L4Re::Env::env()->parent().
  */
 struct Manager_Worker
     : L4::Kobject_2t<Manager_Worker, Manager_Base, L4Re::Parent, PROTO_MANAGER_WORKER>
 {
   /**
-   * @brief Exit worker and return string
+   * @brief Faas specific exit functions that workers should use
    *
    * @note This function can be called by workers to tell the manger
    * to delete their process and hand the returned string back to the
@@ -168,4 +167,6 @@ public:
   typedef L4::Typeid::Rpcs<register_client_t> Rpcs;
 };
 
-}
+} // namespace MettEagle
+
+} // namespace L4

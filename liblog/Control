@@ -1,2 +1,3 @@
+requires: stdlibs
 provides: liblog
 maintainer: Max.Kurze@mailbox.tu-dresden.de

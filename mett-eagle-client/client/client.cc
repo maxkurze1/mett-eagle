@@ -10,6 +10,7 @@
 #include <l4/mett-eagle/client>
 #include <l4/mett-eagle/util>
 #include <l4/mett-eagle/manager>
+#include <l4/mett-eagle/alias>
 #include <l4/re/util/br_manager>
 #include <l4/sys/cxx/ipc_server_loop>
 #include <l4/sys/ipc_gate>
@@ -18,15 +19,13 @@
 #include <time.h>
 #include <unistd.h>
 
-
-// L4Re::Util::Object_registry registry{ &server_interface };
-
 int
 main (const int _argc, const char *const _argv[])
 try
   {
     (void)_argc;
     (void)_argv;
+
 
     auto manager = MettEagle::getManager("manager");
 
@@ -40,6 +39,8 @@ try
     MettEagle::invoke("test");
 
     log_info ("function returned");
+
+    log_debug("server ref %p", &MettEagle::getServer());
 
     return EXIT_SUCCESS;
   }

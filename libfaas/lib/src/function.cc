@@ -3,8 +3,8 @@
 #include <l4/mett-eagle/manager>
 #include <l4/re/env>
 #include <string.h>
-#include <l4/libfaas/util>
-
+#include <l4/libfaas/faas>
+#include <l4/mett-eagle/alias>
 
 /**
  * @brief Wrapper main that will handle the MettEagle manager interaction
@@ -13,7 +13,7 @@ int
 main (int argc, const char *argv[])
 try
   {
-    /* there has to be exactly one argument -- the json string passed */
+    /* there has to be exactly one argument -- the string passed */
     if (L4_UNLIKELY (argc != 1))
       throw L4::Runtime_error (-L4_EINVAL, "Wrong arguments");
     
@@ -35,5 +35,5 @@ catch (L4::Runtime_error &e)
      * methods like L4Re::chkcap or by own methods
      */
     log_fatal (e);
-    return 1; // maybe propagate the error to the client?
+    return e.err_no(); // propagate the error to the client
   }

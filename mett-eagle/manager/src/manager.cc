@@ -59,22 +59,20 @@ L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> server;
 std::map<L4::Cap<MettEagle::Manager_Base>, L4::Cap<MettEagle::Client> >
     gate_to_client;
 
-std::list<Worker *> workers;
-
 long
 Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                                         const L4::Ipc::String_in_buf<> &name)
 {
-  log_info ("Invoke action name='%s'", name.data);
+  log_debug ("Invoke action name='%s'", name.data);
   /* c++ maps dont have a map#contains */
-  if (_actions->count (name.data) == 0)
+  if (L4_UNLIKELY (_actions->count (name.data) == 0))
     {
       log_error ("Action %s doensn't exists", name.data);
       return -L4_EINVAL;
     }
 
-  L4::Cap<L4Re::Dataspace> file = (*_actions)[name.data];
   /* cap can be unmapped anytime ... add try catch or some error handling */
+  L4::Cap<L4Re::Dataspace> file = (*_actions)[name.data];
   if (not file.is_valid ())
     log_error ("dataspace invalid");
 
@@ -98,7 +96,6 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   worker->set_argv_strings ({ name.data });
   worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=DEBUG" });
   worker->launch ();
-  workers.push_back (worker);
 
   log_info ("Started process");
   return L4_EOK;
@@ -118,7 +115,8 @@ Manager_Client_Epiface::op_action_create (MettEagle::Manager_Client::Rights,
     }
 
   /* get the received capability */
-  (*_actions)[name.data] = server_iface ()->rcv_cap<rec (0) < 0))
+  (*_actions)[name.data] = server_iface ()->rcv_cap<L4Re::Dataspace> (0);
+  if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
     {
       log_error ("Failed to realloc_rcv_cap");
       return -L4_ENOMEM;
@@ -144,6 +142,7 @@ Manager_Worker_Epiface::op_signal (L4Re::Parent::Rights, unsigned long sig,
         {
           auto client = gate_to_client[obj_cap ()];
           // TODO check client cap valid
+          (void)value;
           client->answer ("worker crashed");
         }
 
@@ -205,10 +204,9 @@ Manager_Registry_Epiface::op_register_client (
 
   /* create new object handling the requests of this client */
   auto epiface = new Manager_Client_Epiface ();
-  /*
-   * register the object in the server loop. This will create the
-   * capability for the object and inform the server to route IPC there.
-   */
+
+  /* register the object in the server loop. This will create the        *
+   * capability for the object and inform the server to route IPC there. */
   L4::Cap<void> cap = server.registry ()->register_obj (epiface);
   if (L4_UNLIKELY (not cap.is_valid ()))
     {
@@ -223,13 +221,6 @@ Manager_Registry_Epiface::op_register_client (
   manager_ipc_gate = epiface->obj_cap ();
   return L4_EOK;
 }
-
-/**
- * @brief Global manager registry handler
- *
- * This object will handle the registration of all new clients.
- */
-Manager_Registry_Epiface metteagle_registry_epiface;
 
 /**
  * This is the entry point of the Mett-Eagle manager
@@ -256,10 +247,10 @@ try
 
     /*
      * Associate the 'server' endpoint that was already 'reserved' by ned
-     * with the newly created interface implementation
+     * with a newly created interface implementation
      */
     L4Re::chkcap (
-        server.registry ()->register_obj (&metteagle_registry_epiface,
+        server.registry ()->register_obj (new Manager_Registry_Epiface (),
                                           "server"),
         "Couldn't register service, is there a 'server' in the caps table?");
 

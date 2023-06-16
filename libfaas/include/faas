@@ -4,13 +4,12 @@
 
 #include <string>
 
-// TODO make json
 /**
  * Main function that needs to be implemented by the faas function
  */
 extern std::string Main (std::string);
 
-namespace L4
+namespace L4Re
 {
 
 namespace Faas

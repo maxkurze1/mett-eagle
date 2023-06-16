@@ -1,15 +1,17 @@
 // -*- Mode: C++ -*-
 // vim:ft=cpp
 /**
- * \file
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
+/**
+ * @file
  * This library provides some logging utilities.
- * 
- * \author    Max Kurze
- * \version   1.0
- * \date      2023
- * \copyright GNU Public License.
- * 
- * \includefile {l4/liblog/log}
+ *
+ * @headerfile {l4/liblog/log}
  */
 
 #pragma once
@@ -19,9 +21,10 @@
 #include <cstring>
 #include <l4/cxx/exceptions>
 
-// TODO HANDLE #ifndef NDEBUG
+namespace L4Re
+{
 
-class Log
+class LibLog
 {
 public:
   /**
@@ -36,9 +39,11 @@ public:
    * a specific combination.
    *
    * For example:
-   *
-   * Log::setLevel(Log::Level::DEBUG_ONLY | Log::Level::ERROR_ONLY)
-   *
+   * @code{.cpp}
+   * L4Re::LibLog::setLevel(L4Re::LibLog::Level::DEBUG_ONLY |
+   *   L4Re::LibLog::Level::ERROR_ONLY)
+   * @endcode
+   * 
    * will only output debug and error messages.
    */
   class Level
@@ -131,7 +136,8 @@ public:
    * @endcode
    */
 #define log_debug(args...)                                                    \
-  Log::printf (Log::MsgLevel::DEBUG, __FILE__, __FUNCTION__, __LINE__, args)
+  L4Re::LibLog::printf (L4Re::LibLog::MsgLevel::DEBUG, __FILE__,              \
+                        __FUNCTION__, __LINE__, args)
 
   /**
    * @brief Write an info message to the log
@@ -144,7 +150,8 @@ public:
    * @endcode
    */
 #define log_info(args...)                                                     \
-  Log::printf (Log::MsgLevel::INFO, __FILE__, __FUNCTION__, __LINE__, args)
+  L4Re::LibLog::printf (L4Re::LibLog::MsgLevel::INFO, __FILE__, __FUNCTION__, \
+                        __LINE__, args)
 
   /**
    * @brief Write a warn message to the log
@@ -157,7 +164,8 @@ public:
    * @endcode
    */
 #define log_warn(args...)                                                     \
-  Log::printf (Log::MsgLevel::WARN, __FILE__, __FUNCTION__, __LINE__, args)
+  L4Re::LibLog::printf (L4Re::LibLog::MsgLevel::WARN, __FILE__, __FUNCTION__, \
+                        __LINE__, args)
 
   /**
    * @brief Write an error message to the log
@@ -170,7 +178,8 @@ public:
    * @endcode
    */
 #define log_error(args...)                                                    \
-  Log::printf (Log::MsgLevel::ERROR, __FILE__, __FUNCTION__, __LINE__, args)
+  L4Re::LibLog::printf (L4Re::LibLog::MsgLevel::ERROR, __FILE__,              \
+                        __FUNCTION__, __LINE__, args)
 
   /**
    * @brief Write a fatal message to the log
@@ -183,7 +192,8 @@ public:
    * @endcode
    */
 #define log_fatal(args...)                                                    \
-  Log::printf (Log::MsgLevel::FATAL, __FILE__, __FUNCTION__, __LINE__, args)
+  L4Re::LibLog::printf (L4Re::LibLog::MsgLevel::FATAL, __FILE__,              \
+                        __FUNCTION__, __LINE__, args)
 
 #else // ifdef NDEBUG
 
@@ -242,16 +252,12 @@ public:
   {
     /* total char count TODO n is somehow 1 off for fputs?? */
     int n = 0;
-    // TODO use log??
-    // L4::Cap<L4Re::Log> log = L4Re::Env::env()->log();
-    // if (L4_UNLIKELY(!log.is_valid))
-    // return 0;
 
     /* check if message should be silenced */
     if (!(msg_lvl & _level.value))
       return 0;
 
-    FILE *output = get_output(msg_lvl);
+    FILE *output = get_output (msg_lvl);
 
     /* output current time and date */
     n += put_time (output);
@@ -280,7 +286,7 @@ public:
 
     /* output message */
     n += fprintf (output, fmt, args...);
-    fputc('\n', output);
+    fputc ('\n', output);
     return n;
   }
 
@@ -390,7 +396,7 @@ private:
 
   /**
    * @brief Get the output 'FILE *'-object
-   * 
+   *
    * @param msg_lvl  The level that will be printed
    * @return stdout  if level is INFO or DEBUG
    * @return stderr  if level if WARN or higher
@@ -404,3 +410,5 @@ private:
       return stdout;
   }
 };
+
+}

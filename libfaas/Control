@@ -1,2 +1,3 @@
+requires: libstdc++
 provides: libfaas
 maintainer: Max.Kurze@mailbox.tu-dresden.de
