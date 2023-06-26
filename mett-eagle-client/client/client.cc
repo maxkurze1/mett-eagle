@@ -18,6 +18,7 @@
 
 #include <time.h>
 #include <unistd.h>
+#include <thread>
 
 int
 main (const int _argc, const char *const _argv[])
@@ -26,21 +27,20 @@ try
     (void)_argc;
     (void)_argv;
 
+    log_debug("creating thread");
 
-    auto manager = MettEagle::getManager("manager");
+    
+
+    // auto manager = MettEagle::getManager("manager");
 
     log_debug ("Register done");
 
-    auto file = MettEagle::open_file("rom/function1");
+    log_debug("join done");
 
-    L4Re::chksys (manager->action_create ("test", file),
-                  "action_create");
+    // manager->action_create ("test", "rom/function1");
+    // std::string ans = manager->action_invoke ("test");
 
-    MettEagle::invoke("test");
-
-    log_info ("function returned");
-
-    log_debug("server ref %p", &MettEagle::getServer());
+    // log_info ("function returned %s\n", ans.c_str());
 
     return EXIT_SUCCESS;
   }

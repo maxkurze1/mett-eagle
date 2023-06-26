@@ -2,6 +2,7 @@
 // vim:ft=cpp
 #pragma once
 
+#include <l4/mett-eagle/manager>
 #include <string>
 
 /**
@@ -14,6 +15,13 @@ namespace L4Re
 
 namespace Faas
 {
+
+/**
+ * @brief Invoke another faas function from a worker
+ * 
+ * @return std::string
+ */
+std::string invoke(std::string);
 
 }
 
