@@ -9,13 +9,11 @@
  */
 
 #include <l4/liblog/log>
-#include <l4/mett-eagle/client>
 #include <l4/mett-eagle/manager>
 #include <l4/re/error_helper>
 #include <l4/re/util/env_ns>
-#include <l4/re/util/object_registry>
-#include <l4/sys/cxx/ipc_epiface>
-#include <memory>
+// #include <memory>
+#include <string>
 
 namespace L4Re
 {
@@ -23,74 +21,8 @@ namespace L4Re
 namespace MettEagle
 {
 
-struct Client_epiface : public L4::Epiface_t<Client_epiface, Client>
-{
-  /* safe last answer */
-  std::string answer_str;
-  long
-  op_answer (Client::Rights, const L4::Ipc::String_in_buf<> &answer)
-  {
-    answer_str = std::string (answer.data, answer.length);
-    return L4_EOK;
-  }
-};
-
-/**
- * A server implementation to wait for a single ipc invocation
- */
-template <typename LOOP_HOOKS = L4::Ipc_svr::Default_loop_hooks>
-class Single_server : public L4::Server<LOOP_HOOKS>
-{
-  typedef L4::Server<LOOP_HOOKS> Base;
-
-protected:
-  template <typename DISPATCH>
-  inline l4_msgtag_t
-  internal_wait (DISPATCH dispatch, l4_utcb_t *utcb)
-  {
-    l4_msgtag_t res, reply = l4_msgtag (-L4_ENOREPLY, 0, 0, 0);
-    l4_umword_t p;
-
-    res = Base::reply_n_wait (reply, &p, utcb);
-    if (res.has_error ())
-      {
-        this->error (res, utcb);
-        return res;
-      }
-    reply = dispatch (res, p, utcb);
-    return reply;
-  }
-
-public:
-  /**
-   * This wait translates L4::Runtime_error exceptions
-   * into negative error return codes sent to the caller
-   * if exceptions are enabled.
-   */
-#ifdef __EXCEPTIONS
-  template <typename EXC, typename R>
-#else
-  template <typename R>
-#endif
-  inline l4_msgtag_t
-  wait (R r, l4_utcb_t *u = l4_utcb ())
-  {
-#ifdef __EXCEPTIONS
-    return internal_wait (L4::Ipc_svr::Exc_dispatch<R, EXC> (r), u);
-#else
-    return internal_wait (L4::Ipc_svr::Direct_dispatch<R> (r), u)
-#endif
-  }
-};
-
 class Manager
 {
-  /* ipc gate given to the manager */
-  Client_epiface _client_epiface;
-  /* server to wait for ipc calls */
-  Single_server<> _server;
-  /* object registry to dispatch corresponding epiface */
-  L4Re::Util::Object_registry _registry{ &_server };
   /* ipc of the metteagle manager */
   L4::Cap<Manager_Client> _manager;
 
@@ -115,16 +47,12 @@ public:
     auto manager_registry = L4Re::chkcap (
         L4Re::Env::env ()->get_cap<MettEagle::Manager_Registry> (cap_name),
         "Couldn't get manager_registry capability");
-    /* register own epiface to receive delayed answers */
-    L4Re::chkcap (manager->_registry.register_obj (&manager->_client_epiface),
-                  "Couldn't register IPC gate");
     /* cap to receive new ipc gate from manager */
     manager->_manager = L4Re::chkcap (
         L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
         "allocate manager capability");
     /* register ipc call, see MettEagle::Manager_Registry */
-    L4Re::chksys (manager_registry->register_client (
-                      manager->_client_epiface.obj_cap (), manager->_manager),
+    L4Re::chksys (manager_registry->register_client (manager->_manager),
                   "register_client");
     return manager;
   }
@@ -132,18 +60,8 @@ public:
   std::string
   action_invoke (const char *const name)
   {
-    // TODO (server is still blocking at the moment)
-    // here it is necessary to do an atomic send and wait
-    // the server will not block on send to prevent client attacks
-    // therefore the client has to be ready to receive the answer immediately
-    // else we might miss it and block forever.
-    // l4_ipc_send_and_wait();
     L4Re::chksys (_manager->action_invoke (name), "action_invoke");
-    L4Re::chksys (
-        _server.wait<L4::Runtime_error, L4Re::Util::Object_registry &> (
-            _registry),
-        "action_invoke wait");
-    return _client_epiface.answer_str;
+    return "done";
   }
 
   void
@@ -152,6 +70,7 @@ public:
     auto file
         = L4Re::chkcap (L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname),
                         "Couldn't find file");
+    log_info("calling create");
     L4Re::chksys (_manager->action_create (name, file), "action_create");
   }
 };

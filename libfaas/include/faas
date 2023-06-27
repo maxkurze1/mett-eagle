@@ -3,6 +3,7 @@
 #pragma once
 
 #include <l4/mett-eagle/manager>
+#include <l4/re/env>
 #include <string>
 
 /**
@@ -18,10 +19,19 @@ namespace Faas
 
 /**
  * @brief Invoke another faas function from a worker
- * 
+ *
  * @return std::string
  */
-std::string invoke(std::string);
+std::string invoke (std::string);
+
+/**
+ * @brief Utility function to get the Manager obj
+ * 
+ * Worker can rely on their parent implementing the worker interface
+ */
+static inline L4::Cap<MettEagle::Manager_Worker> getManager(){
+  return L4::cap_cast<MettEagle::Manager_Worker> (L4Re::Env::env ()->parent ());
+}
 
 }
 

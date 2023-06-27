@@ -16,15 +16,11 @@
 
 #pragma once
 
-#include <l4/liblog/log>
-#include <l4/mett-eagle/client>
 #include <l4/re/dataspace>
 #include <l4/re/parent>
 #include <l4/sys/capability>
 #include <l4/sys/cxx/ipc_iface>
 #include <l4/sys/cxx/ipc_types>
-#include <map>
-#include <string>
 
 namespace L4Re
 {
@@ -62,8 +58,7 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BAS
    * @return          -L4_EINVAL if the L4Re::Dataspace of the action is no
    *                  longer valid
    */
-  L4_INLINE_RPC (l4_msgtag_t, action_invoke, (L4::Ipc::String<> name),
-                 L4::Ipc::Send_only);
+  L4_INLINE_RPC (l4_msgtag_t, action_invoke, (L4::Ipc::String<> name));
 
   typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
 };
@@ -132,26 +127,16 @@ struct Manager_Worker
  * and get access to an IPC gate with the real Manager interface.
  */
 struct Manager_Registry
-    : L4::Kobject_t<Manager_Registry, L4::Kobject, PROTO_MANAGER_REGISTRY,
-                    L4::Type_info::Demand_t<1> >
-// It is necessary to declare the Demand_t<1> to receive the client capability
-// it is also necessary to use the Br_manager to allocate the needed receive
-// capability
+    : L4::Kobject_t<Manager_Registry, L4::Kobject, PROTO_MANAGER_REGISTRY>
 {
 public:
   /**
    * @brief Register a new client.
    *
-   * This method will send an Ipc_gate from a new client to the manager. This
-   * gate will be used to answer requests of this specific client.
-   *
    * The server will reply with a newly created Ipc_gate which should be used
    * by the client for all subsequent requests. This is necessary for the
-   * manager to identify which message came from which client and where to send
-   * the reply.
+   * manager to identify which message came from which client.
    *
-   * @param[in]  client_ipc_gate   Client Ipc_gate that the manager will call
-   *                               (e.g. if an action finished)
    * @param[out] manager_ipc_gate  Manager Ipc_gate that should be used for all
    *                               subsequent interaction
    * @return                       L4_EOK on success
@@ -161,8 +146,7 @@ public:
    *                               allocated
    */
   L4_INLINE_RPC (l4_msgtag_t, register_client,
-                 (L4::Ipc::Cap<Client> client_ipc_gate,
-                  L4::Ipc::Out<L4::Cap<Manager_Client> > manager_ipc_gate));
+                 (L4::Ipc::Out<L4::Cap<Manager_Client> > manager_ipc_gate));
 
   typedef L4::Typeid::Rpcs<register_client_t> Rpcs;
 };

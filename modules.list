@@ -7,6 +7,7 @@ entry mett-eagle
     module ned
     module mett-eagle.cfg
     module function1
+    module function2
     module mett-eagle
     module mett-eagle-client
 

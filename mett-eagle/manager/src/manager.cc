@@ -9,15 +9,17 @@
 #include "app_model.h"
 #include "worker.h"
 
-#include <map>
+#include <condition_variable>
 #include <list>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 
 #include <l4/liblog/log>
-#include <l4/mett-eagle/client>
-#include <l4/mett-eagle/manager>
 #include <l4/mett-eagle/alias>
+#include <l4/mett-eagle/manager>
 
 #include <l4/re/env>
 #include <l4/re/error_helper>
@@ -27,38 +29,10 @@
 #include <l4/re/util/cap_alloc>
 #include <l4/re/util/env_ns>
 #include <l4/re/util/object_registry>
+#include <l4/sys/cxx/ipc_epiface>
+#include <l4/sys/thread>
 
-/**
- * Absolutely no clue what this does..
- * Something with the kip ...
- * KIP === Kernel Interface Page
- */
-l4re_aux_t *l4re_aux;
-
-/**
- * This is the object will handle all RPC calls and forward them
- * to the corresponding interface implementations.
- *
- * It will handle RPC's from clients as well as RPC's from started
- * processes (= workers).
- *
- * Br_manager is necessary to handle the demand of cap slots. For example:
- * register_client will use a cap slot fot the client ipc_gate passed to the
- * method.
- */
-L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> server;
-
-/**
- * This will map the ipc gate which received a message to the client ipc gate
- * which will receive the answer.
- *
- * @note Per default the kernel 'ipc reply' will be used to answer calls, but
- * in cases where the processing of the message might take very long (e.g.
- * invoking a serverless function) the rpc call will return early and the
- * clients ipc gate will be used to answer.
- */
-std::map<L4::Cap<MettEagle::Manager_Base>, L4::Cap<MettEagle::Client> >
-    gate_to_client;
+#include <thread-l4>
 
 struct Manager_Base_Epiface : L4::Epiface_t0<MettEagle::Manager_Base>
 {
@@ -70,6 +44,7 @@ protected:
    * them to the workers started by this specific client only.
    */
   std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > > _actions;
+  L4::Cap<L4::Thread> _thread;
 
 public:
   long op_action_invoke (MettEagle::Manager_Base::Rights,
@@ -80,12 +55,18 @@ struct Manager_Client_Epiface
     : L4::Epiface_t<Manager_Client_Epiface, MettEagle::Manager_Client,
                     Manager_Base_Epiface>
 {
-  Manager_Client_Epiface ()
+  // protected:
+  //   L4::Cap<L4::Thread> _thread;
+public:
+  Manager_Client_Epiface (L4::Cap<L4::Thread> thread)
   {
-    /* _actions map will be create by the clients and only passed *
-     * to each worker                                             */
+    /* _actions map will be create by the clients epiface and only *
+     * passed to each worker epiface.                              */
     _actions = std::make_shared<
         std::map<std::string, L4::Cap<L4Re::Dataspace> > > ();
+    // _thread = L4Re::chkcap(L4Re::Util::cap_alloc.alloc(), "couldn't allocate
+    // thread"); L4Re::chksys(L4Re::Env::env()->factory()->create(_thread));
+    _thread = thread;
   }
 
   long
@@ -93,15 +74,17 @@ struct Manager_Client_Epiface
                     const L4::Ipc::String_in_buf<> &name,
                     L4::Ipc::Snd_fpage file)
   {
+    log_info ("action create info");
     log_debug ("Create action name='%s' file passed='%d'", name.data,
                file.cap_received ());
     if (L4_UNLIKELY (not file.cap_received ()))
       {
-        log_error ("No capability received");
+        log_error ("No dataspace cap received");
         return -L4_EINVAL;
       }
 
     /* get the received capability */
+    // TODO name collision ?
     (*_actions)[name.data] = server_iface ()->rcv_cap<L4Re::Dataspace> (0);
     if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
       {
@@ -118,10 +101,12 @@ struct Manager_Worker_Epiface
 {
   Manager_Worker_Epiface (
       std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > >
-          actions)
+          actions,
+      L4::Cap<L4::Thread> thread)
   {
     /* passed actions map from the client */
     _actions = actions;
+    _thread = thread;
   }
 
   /**
@@ -145,21 +130,10 @@ struct Manager_Worker_Epiface
       {
         /* faas function probably threw an error   *
          * in this case value holds the error code */
-        log_error ("Worker finished with wrong exit!");
+        log_error ("Worker finished with wrong exit! Err: %d", val);
         // TODO return error to parent
-
-        if (not gate_to_client.count (obj_cap ()))
-          {
-            log_error ("Couldn't find client of worker!");
-          }
-        else
-          {
-            auto client = gate_to_client[obj_cap ()];
-            // TODO check client cap valid
-            (void)val;
-            client->answer ("worker crashed");
-          }
-
+        // TODO maybe better to delete cap??
+        L4Re::Env::env ()->task ()->release_cap (obj_cap ());
         // terminate ();
 
         //     delete this;
@@ -174,19 +148,10 @@ struct Manager_Worker_Epiface
   op_exit (MettEagle::Manager_Worker::Rights,
            const L4::Ipc::String_in_buf<> &value)
   {
-    log_debug ("Worker exit");
-    if (not gate_to_client.count (obj_cap ()))
-      {
-        log_error ("Couldn't find client of worker!");
-      }
-    else
-      {
-        auto client = gate_to_client[obj_cap ()];
-        // TODO check client cap valid
-        client->answer (value.data);
-      }
+    log_debug ("Worker exit: %s", value);
     // terminate ();
-
+    L4Re::Env::env ()->task ()->release_cap (obj_cap ());
+    log_debug ("cap valid %ld", obj_cap ().validate ().label ());
     //     delete this;
 
     /* do not send answer -- block worker */
@@ -206,37 +171,66 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name.data) == 0))
     {
-      log_error ("Action %s doensn't exists", name.data);
+      log_error ("Action '%s' doesn't exist", name.data);
       return -L4_EINVAL;
     }
 
-  /* cap can be unmapped anytime ... add try catch or some error handling */
+  /* cap can be unmapped anytime ... TODO add try catch or some error handling
+   */
   L4::Cap<L4Re::Dataspace> file = (*_actions)[name.data];
-  if (not file.is_valid ())
-    log_error ("dataspace invalid");
+  if (not file.validate ().label())
+    {
+      log_error ("dataspace invalid");
+      return -L4_EINVAL;
+    }
 
   /* create new ipc_gate for started process */
-  auto worker_epiface = new Manager_Worker_Epiface (_actions);
+  auto worker_epiface = new Manager_Worker_Epiface (_actions, _thread);
 
   /* register the object in the server loop. This will create the        *
    * capability for the object and inform the server to route IPC there. */
-  L4::Cap<void> cap = server.registry ()->register_obj (worker_epiface);
-  if (L4_UNLIKELY (not cap.is_valid ()))
-    {
-      log_error ("Failed to register IPC gate");
-      return -L4_ENOMEM;
-    }
+  auto cap = L4Re::chkcap (
+      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Worker> (),
+      "Failed to alloc cap", -L4_ENOMEM);
 
-  /* associate new worker_epiface with client gate to answer */
-  gate_to_client[worker_epiface->obj_cap ()] = gate_to_client[obj_cap ()];
+  L4Re::chksys (L4Re::Env::env ()->factory ()->create_gate (
+                    cap, _thread, l4_umword_t (worker_epiface)),
+                "Failed to create gate");
+  worker_epiface->set_server (new L4::Ipc_svr::Default_loop_hooks (), cap);
 
   /* Pass the IPC gate to process as parent */
-  Worker *worker = new Worker (file, worker_epiface->obj_cap ());
+  Worker *worker = new Worker (file, cap);
   worker->set_argv_strings ({ name.data });
   worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=DEBUG" });
   worker->launch ();
 
-  log_info ("Started process");
+  // ========================= Server loop =========================
+  /**
+   * The following code implements a simple server loop. This loop has no
+   * demand allocation (-> can't receive capabilities) and will only dispatch
+   * to a single Epiface object.
+   * Nonetheless this loop is necessary to receive from and reply to a specific
+   * capability. In order to keep the reply capability of the client.
+   */
+  l4_msgtag_t msg = L4Re::chkipc (
+      l4_ipc_receive (worker->_thread.cap (), l4_utcb (), L4_IPC_NEVER),
+      "Worker ipc failed.");
+
+  while (true)
+    {
+      /* call the corresponding function of the epiface */
+      l4_msgtag_t reply = worker_epiface->dispatch (
+          msg, 0 /* rights dont matter*/, l4_utcb ());
+      /* the exit handler will release the capability */
+      /* check if kernel object still exists */
+      if (not cap.validate ().label ())
+        break;
+      /* no exit received -> wait for next RPC */
+      msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
+                         L4_IPC_NEVER);
+    }
+
+  log_info ("Worker finished");
   return L4_EOK;
 }
 
@@ -245,44 +239,89 @@ struct Manager_Registry_Epiface
 {
   long
   op_register_client (
-      MettEagle::Manager_Registry::Rights, L4::Ipc::Snd_fpage client_ipc_gate,
+      MettEagle::Manager_Registry::Rights,
       L4::Ipc::Cap<MettEagle::Manager_Client> &manager_ipc_gate)
   {
     log_debug ("Registering client");
-    if (L4_UNLIKELY (not client_ipc_gate.cap_received ()))
-      {
-        log_error ("No capability received");
-        return -L4_EINVAL;
-      }
-    /* get the received capability */
-    auto client = server_iface ()->rcv_cap<MettEagle::Client> (0);
-    /* allocate new capability slot for next client */
-    if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
-      {
-        log_error ("Failed to realloc_rcv_cap");
-        return -L4_ENOMEM;
-      }
 
+    /* sync client and server */
+    std::condition_variable sync;
+    /* used for sync */
+    std::mutex mtx;
+
+    /* create a new server that will handle only this client (and its
+     * processes) */
+    /*
+     * Br_manager is necessary to handle the demand of cap slots. They
+     * are used e.g. to receive the Dataspace of a client while creating
+     * a new action.
+     */
+    L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> *client_server
+        = nullptr;
+
+    /* start new thread handling this specific client */
+    std::thread client_handler{ [&mtx, &sync, &client_server] {
+      /* Wait until registry server is created */
+      std::unique_lock<std::mutex> lock{ mtx }; // acquire lock
+      sync.wait (lock, [&client_server] { return client_server != nullptr; });
+      lock.unlock ();
+      log_info ("Start client ipc server");
+      client_server->loop ();
+    } };
+
+    log_debug ("created thread %ld", std::L4::thread_cap (client_handler));
+
+    std::unique_lock<std::mutex> lock{ mtx }; // acquire lock
+    client_server
+        = new L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> (
+            std::L4::thread_cap (client_handler),
+            L4Re::Env::env ()->factory ());
     /* create new object handling the requests of this client */
-    auto epiface = new Manager_Client_Epiface ();
-
+    /* TODO handle deallocation */
+    auto epiface
+        = new Manager_Client_Epiface (std::L4::thread_cap (client_handler));
     /* register the object in the server loop. This will create the        *
      * capability for the object and inform the server to route IPC there. */
-    L4::Cap<void> cap = server.registry ()->register_obj (epiface);
+    L4::Cap<void> cap = client_server->registry ()->register_obj (epiface);
     if (L4_UNLIKELY (not cap.is_valid ()))
       {
         log_error ("Failed to register client IPC gate");
+        client_server->registry()->unregister_obj(epiface);
+        // TODO destroy thread
         return -L4_ENOMEM;
       }
-
-    /* associate client ipc gate with epiface */
-    gate_to_client[epiface->obj_cap ()] = client;
+    /* notify thread */
+    lock.unlock ();
+    sync.notify_one ();
+    /*
+     * Note: The thread might start the server loop after the ipc call returned
+     * to the client. In case the client sends a request before the server loop
+     * is started it will be blocked by the ipc until the thread calls
+     * server::loop() and thereby start an open wait.
+     */
 
     /* Pass the IPC gate back to the client as output argument. */
     manager_ipc_gate = epiface->obj_cap ();
+
+    /* separate thread from the 'client_handler' object */
+    client_handler.detach ();
     return L4_EOK;
   }
 };
+
+/**
+ * Absolutely no clue what this does..
+ * Something with the kip ...
+ * KIP === Kernel Interface Page
+ *
+ * Used by the loader somehow
+ */
+l4re_aux_t *l4re_aux;
+
+/**
+ * This object will handle registration RPCs from clients.
+ */
+L4Re::Util::Registry_server<> register_server;
 
 /**
  * This is the entry point of the Mett-Eagle manager
@@ -312,14 +351,14 @@ try
      * with a newly created interface implementation
      */
     L4Re::chkcap (
-        server.registry ()->register_obj (new Manager_Registry_Epiface (),
-                                          "server"),
+        register_server.registry ()->register_obj (
+            new Manager_Registry_Epiface (), "server"),
         "Couldn't register service, is there a 'server' in the caps table?");
 
     log_info ("Started Mett-Eagle server!");
 
     // start server loop -- loop will not return!
-    server.loop ();
+    register_server.loop ();
   }
 catch (L4::Runtime_error &e)
   {
@@ -327,5 +366,5 @@ catch (L4::Runtime_error &e)
      * Catch all errors (e.g. from chkcap) and log some message
      */
     log_fatal (e);
-    return EXIT_FAILURE;
+    return e.err_no ();
   }

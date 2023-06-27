@@ -7,7 +7,6 @@
 
 #include <l4/cxx/iostream>
 #include <l4/liblog/log>
-#include <l4/mett-eagle/client>
 #include <l4/mett-eagle/util>
 #include <l4/mett-eagle/manager>
 #include <l4/mett-eagle/alias>
@@ -19,6 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <thread>
+#include <string>
 
 int
 main (const int _argc, const char *const _argv[])
@@ -27,20 +27,19 @@ try
     (void)_argc;
     (void)_argv;
 
-    log_debug("creating thread");
+    log_debug("Hello from client");
 
-    
-
-    // auto manager = MettEagle::getManager("manager");
+    auto manager = MettEagle::getManager("manager");
 
     log_debug ("Register done");
 
-    log_debug("join done");
+    manager->action_create ("test", "rom/function1");
+    manager->action_create ("test_idk", "rom/function2");
 
-    // manager->action_create ("test", "rom/function1");
-    // std::string ans = manager->action_invoke ("test");
+    log_debug("create done");
+    std::string ans = manager->action_invoke ("test");
 
-    // log_info ("function returned %s\n", ans.c_str());
+    log_info ("function returned %s\n", ans.c_str());
 
     return EXIT_SUCCESS;
   }

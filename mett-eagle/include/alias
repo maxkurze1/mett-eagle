@@ -16,4 +16,6 @@
 
 #pragma once
 
+namespace L4Re { namespace MettEagle {} }
+
 namespace MettEagle = L4Re::MettEagle;

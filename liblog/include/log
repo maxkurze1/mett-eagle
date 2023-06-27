@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <l4/cxx/exceptions>
+#include <thread>
 
 namespace L4Re
 {
@@ -279,6 +280,8 @@ public:
     n += fprintf (output, "\033[2m<%s:%d>\033[0m", rindex (file, '/') + 1,
                   line);
     fputc (' ', output);
+
+    fprintf(output, "%ld", std::this_thread::get_id());
 
     /* print function name */
     n += fprintf (output, "\033[2m%s:\033[0m", function);
