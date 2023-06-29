@@ -103,7 +103,7 @@ struct Manager_Base
     l4_msgtag_t mt = action_invoke_t::call (c (), name, arr);
     /* ret will always be 0 terminated - if not it was truncated */
     if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))
-      throw new L4::Runtime_error (-L4_EMSGTOOLONG,
+      throw L4::Runtime_error (-L4_EMSGTOOLONG,
                                    "The client receive buffer is too small");
     /* create a std::string copy of the data */
     ret = arr.data;

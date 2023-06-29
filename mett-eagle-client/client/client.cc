@@ -25,7 +25,7 @@ try
 
     log_debug ("Register done");
 
-    manager->action_create ("test", "rom/function1");
+    L4Re::chksys(manager->action_create ("test", "rom/function1"), "action create");
     manager->action_create ("test_idk", "rom/function2");
     
     log_debug ("create done");

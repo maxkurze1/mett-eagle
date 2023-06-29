@@ -7,6 +7,7 @@
  */
 
 #include "app_model.h"
+#include "exc_log_dispatch.h"
 #include "worker.h"
 
 #include <condition_variable>
@@ -76,22 +77,17 @@ public:
                     const L4::Ipc::String_in_buf<> &name,
                     L4::Ipc::Snd_fpage file)
   {
+
     log_debug ("Create action name='%s' file passed='%d'", name.data,
                file.cap_received ());
     if (L4_UNLIKELY (not file.cap_received ()))
-      {
-        log_error ("No dataspace cap received");
-        return -L4_EINVAL;
-      }
+      throw L4::Runtime_error (-L4_EINVAL, "No dataspace cap received");
 
     /* get the received capability */
     // TODO name collision ?
     (*_actions)[name.data] = server_iface ()->rcv_cap<L4Re::Dataspace> (0);
     if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
-      {
-        log_error ("Failed to realloc_rcv_cap");
-        return -L4_ENOMEM;
-      }
+      throw L4::Runtime_error (-L4_ENOMEM, "Failed to realloc_rcv_cap");
     return L4_EOK;
   }
 };
@@ -177,8 +173,12 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name.data) == 0))
     {
-      log_error ("Action '%s' doesn't exist", name.data);
-      return -L4_EINVAL;
+      // TODO string memory leak?
+      std::unique_ptr<char> ptr;
+      char *string;
+      asprintf (&string, "Action '%s' doesn't exist", name.data);
+      ptr.reset (string);
+      throw L4::Runtime_error (-L4_EINVAL, string);
     }
 
   /* cap can be unmapped anytime ... TODO add try catch or some error
@@ -186,10 +186,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
    */
   L4::Cap<L4Re::Dataspace> file = (*_actions)[name.data];
   if (not file.validate ().label ())
-    {
-      log_error ("dataspace invalid");
-      return -L4_EINVAL;
-    }
+    throw L4::Runtime_error (-L4_EINVAL, "dataspace invalid");
 
   // TODO extract to own function
   std::string exit_value;
@@ -298,7 +295,10 @@ struct Manager_Registry_Epiface
       sync.wait (lock, [&client_server] { return client_server != nullptr; });
       lock.unlock ();
       log_info ("Start client ipc server");
-      client_server->loop ();
+      client_server->internal_loop (
+          Exc_log_dispatch<L4Re::Util::Object_registry &, L4::Runtime_error> (
+              *client_server->registry ()),
+          l4_utcb ());
     });
 
     log_debug ("created thread %ld", std::L4::thread_cap (client_handler));
@@ -317,10 +317,10 @@ struct Manager_Registry_Epiface
     L4::Cap<void> cap = client_server->registry ()->register_obj (epiface);
     if (L4_UNLIKELY (not cap.is_valid ()))
       {
-        log_error ("Failed to register client IPC gate");
         client_server->registry ()->unregister_obj (epiface);
-        // TODO destroy thread
-        return -L4_ENOMEM;
+        // TODO destroy thread -- done by discarding the handle?
+        throw L4::Runtime_error (-L4_ENOMEM,
+                                 "Failed to register client IPC gate");
       }
     /* notify thread */
     lock.unlock ();
@@ -390,7 +390,11 @@ try
     log_info ("Started Mett-Eagle server!");
 
     // start server loop -- loop will not return!
-    register_server.loop ();
+    // started with custom dispatch to log errors
+    register_server.internal_loop (
+        Exc_log_dispatch<L4Re::Util::Object_registry &, L4::Runtime_error> (
+            *register_server.registry ()),
+        l4_utcb ());
   }
 catch (L4::Runtime_error &e)
   {
