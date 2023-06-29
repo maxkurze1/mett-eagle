@@ -4,5 +4,5 @@
 std::string Main(std::string args) {
   log_info("Hello from function2, param: %s", args.c_str());
 
-  return "Hello from function2";
+  return "function2 long name";
 }

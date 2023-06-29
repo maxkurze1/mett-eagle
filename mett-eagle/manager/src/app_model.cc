@@ -104,7 +104,7 @@ App_model::local_detach_ds (l4_addr_t addr, unsigned long /*size*/) const
   chksys (rm->detach (pg_addr, 0), "detach temporary VMA");
 }
 
-App_model::App_model (L4::Cap<L4Re::Parent> const &parent,
+App_model::App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
                       L4::Cap<L4::Factory> const &alloc)
     : _task (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4::Task> (),
                            "allocating task cap")),

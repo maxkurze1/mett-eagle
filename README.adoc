@@ -3,3 +3,15 @@
 :email: Max.Kurze@mailbox.tu-dresden.de
 
 Mett-Eagle is a Serverless platform to execute functions on top of the Fiasco.OC microkernel.
+
+== Usage
+
+The project should be cloned into a directory `+<l4-dir>/pkg/<faas-dir>+`.
+It can then be build using the default `+make+` command inside the l4-build directory.
+
+To execute the MettEagle manager together with the example client invoke:
+
+[source,bash]
+----
+make qemu MODULE_SEARCH_PATH=../build-fiasco:../l4/pkg/faas MODULES_LIST=../l4/pkg/faas/modules.list E=mett-eagle
+----

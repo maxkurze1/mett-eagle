@@ -281,8 +281,6 @@ public:
                   line);
     fputc (' ', output);
 
-    fprintf(output, "%ld", std::this_thread::get_id());
-
     /* print function name */
     n += fprintf (output, "\033[2m%s:\033[0m", function);
     fputc (' ', output);

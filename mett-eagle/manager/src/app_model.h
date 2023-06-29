@@ -49,7 +49,7 @@ struct App_model : public Ldr::Base_app_model<Stack>
   L4::Cap<L4::Thread> _thread;
   L4::Cap<L4Re::Rm> _rm;
 
-  explicit App_model (L4::Cap<L4Re::Parent> const &parent,
+  explicit App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
                       L4::Cap<L4::Factory> const &alloc
                       = L4Re::Env::env ()->user_factory ());
 

@@ -1,3 +1,11 @@
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
+
 #include <cstdlib>
 #include <ctime>
 #include <l4/liblog/log>

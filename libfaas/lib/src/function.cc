@@ -1,15 +1,25 @@
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
+
 #include <l4/libfaas/faas>
 #include <l4/liblog/log>
+
 #include <l4/mett-eagle/alias>
-#include <l4/mett-eagle/util>
+
 #include <l4/re/env>
 #include <l4/re/error_helper>
-#include <string.h>
 
-// global objects
+#include <string>
+
+#include <l4/sys/utcb.h>
 
 /**
- * @brief Wrapper main that will handle the MettEagle manager interaction
+ * @brief Wrapper main that will handle the manager interaction
  */
 int
 main (int argc, const char *argv[])
@@ -24,7 +34,7 @@ try
 
     /* the default _exit implementation can only return an integer *
      * to pass a string the custom manager->exit must be used.     */
-    L4Re::chksys (L4Re::Faas::getManager ()->exit (ret.c_str ()));
+    L4Re::chksys (L4Re::Faas::getManager ()->exit (ret.c_str ()), "exit rpc");
 
     throw L4::Runtime_error (-L4_EFAULT,
                              "Wrapper main should never get here!");
@@ -40,13 +50,6 @@ catch (L4::Runtime_error &e)
   }
 catch (... /* catch all */)
   {
+    log_fatal("Function threw unknown error.");
     return -L4_EINVAL;
   }
-
-std::string
-L4Re::Faas::invoke (std::string name)
-{
-  L4Re::chksys (L4Re::Faas::getManager ()->action_invoke (name.c_str ()),
-                "faas invoke failed");
-  return "invoked";
-}

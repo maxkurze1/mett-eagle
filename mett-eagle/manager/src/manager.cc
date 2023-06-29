@@ -38,25 +38,27 @@ struct Manager_Base_Epiface : L4::Epiface_t0<MettEagle::Manager_Base>
 {
 protected:
   /**
-   * @brief Per client name for dataspace resolution
+   * @brief Per client namespace (map) for dataspace resolution
    *
    * This map will hold all registered actions of a client and also provide
    * them to the workers started by this specific client only.
    */
   std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > > _actions;
+  /**
+   * @brief The client specific thread that will execute all actions
+   */
   L4::Cap<L4::Thread> _thread;
 
 public:
   long op_action_invoke (MettEagle::Manager_Base::Rights,
-                         const L4::Ipc::String_in_buf<> &name);
+                         const L4::Ipc::String_in_buf<> &name,
+                         L4::Ipc::Array_ref<char> &ret);
 };
 
 struct Manager_Client_Epiface
     : L4::Epiface_t<Manager_Client_Epiface, MettEagle::Manager_Client,
                     Manager_Base_Epiface>
 {
-  // protected:
-  //   L4::Cap<L4::Thread> _thread;
 public:
   Manager_Client_Epiface (L4::Cap<L4::Thread> thread)
   {
@@ -74,7 +76,6 @@ public:
                     const L4::Ipc::String_in_buf<> &name,
                     L4::Ipc::Snd_fpage file)
   {
-    log_info ("action create info");
     log_debug ("Create action name='%s' file passed='%d'", name.data,
                file.cap_received ());
     if (L4_UNLIKELY (not file.cap_received ()))
@@ -99,14 +100,20 @@ struct Manager_Worker_Epiface
     : L4::Epiface_t<Manager_Worker_Epiface, MettEagle::Manager_Worker,
                     Manager_Base_Epiface>
 {
+protected:
+  /* worker object that corresponds to this epiface */
+  std::shared_ptr<Worker> _worker;
+
+public:
   Manager_Worker_Epiface (
       std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > >
           actions,
-      L4::Cap<L4::Thread> thread)
+      L4::Cap<L4::Thread> thread, std::shared_ptr<Worker> worker)
   {
     /* passed actions map from the client */
     _actions = actions;
     _thread = thread;
+    _worker = worker;
   }
 
   /**
@@ -133,6 +140,7 @@ struct Manager_Worker_Epiface
         log_error ("Worker finished with wrong exit! Err: %d", val);
         // TODO return error to parent
         // TODO maybe better to delete cap??
+        _worker->exit ("");
         L4Re::Env::env ()->task ()->release_cap (obj_cap ());
         // terminate ();
 
@@ -148,13 +156,11 @@ struct Manager_Worker_Epiface
   op_exit (MettEagle::Manager_Worker::Rights,
            const L4::Ipc::String_in_buf<> &value)
   {
-    log_debug ("Worker exit: %s", value);
+    log_debug ("Worker exit: %s", value.data);
     // terminate ();
+    _worker->exit (value.data);
     L4Re::Env::env ()->task ()->release_cap (obj_cap ());
-    log_debug ("cap valid %ld", obj_cap ().validate ().label ());
     //     delete this;
-
-    /* do not send answer -- block worker */
 
     /* With -L4_ENOREPLY no answer will be send to the worker. Thus the worker
      * will keep waiting. */
@@ -162,10 +168,10 @@ struct Manager_Worker_Epiface
   }
 };
 
-/* need to be defined after the declaration of Manager_Worker_Epiface */
 long
 Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
-                                        const L4::Ipc::String_in_buf<> &name)
+                                        const L4::Ipc::String_in_buf<> &name,
+                                        L4::Ipc::Array_ref<char> &ret)
 {
   log_debug ("Invoke action name='%s'", name.data);
   /* c++ maps dont have a map#contains */
@@ -175,62 +181,88 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
       return -L4_EINVAL;
     }
 
-  /* cap can be unmapped anytime ... TODO add try catch or some error handling
+  /* cap can be unmapped anytime ... TODO add try catch or some error
+   * handling
    */
   L4::Cap<L4Re::Dataspace> file = (*_actions)[name.data];
-  if (not file.validate ().label())
+  if (not file.validate ().label ())
     {
       log_error ("dataspace invalid");
       return -L4_EINVAL;
     }
 
-  /* create new ipc_gate for started process */
-  auto worker_epiface = new Manager_Worker_Epiface (_actions, _thread);
+  // TODO extract to own function
+  std::string exit_value;
+  {
+    /* register the object in the server loop. This will create the        *
+     * capability for the object and inform the server to route IPC there. */
+    /**
+     * Note: One needs to be very careful here. On deletion (at the end of the
+     * scope) the smart capability will unmap its managed capability. This
+     * unmap will be a systemcall itself and again mess up the utcb.
+     *
+     * To prevent the corruption of returned values the cap should be deleted
+     * before they are set.
+     */
+    auto cap = L4Re::chkcap (
+        L4Re::Util::make_ref_del_cap<MettEagle::Manager_Worker> (),
+        "Failed to alloc cap", -L4_ENOMEM);
+    /* Pass the IPC gate cap to process as parent */
+    auto worker = std::make_shared<Worker> (file, cap);
+    /* create the ipc handler for started process */
+    auto worker_epiface
+        = std::make_unique<Manager_Worker_Epiface> (_actions, _thread, worker);
+    /* link capability to ipc gate */
+    L4Re::chksys (
+        L4Re::Env::env ()->factory ()->create_gate (
+            cap.get (), _thread, l4_umword_t (worker_epiface.get ())),
+        "Failed to create gate");
+    worker_epiface->set_server (new L4::Ipc_svr::Default_loop_hooks (),
+                                cap.get ());
 
-  /* register the object in the server loop. This will create the        *
-   * capability for the object and inform the server to route IPC there. */
-  auto cap = L4Re::chkcap (
-      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Worker> (),
-      "Failed to alloc cap", -L4_ENOMEM);
+    /* start worker */
+    worker->set_argv_strings ({ name.data });
+    worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=DEBUG" });
+    worker->launch ();
 
-  L4Re::chksys (L4Re::Env::env ()->factory ()->create_gate (
-                    cap, _thread, l4_umword_t (worker_epiface)),
-                "Failed to create gate");
-  worker_epiface->set_server (new L4::Ipc_svr::Default_loop_hooks (), cap);
+    /**
+     * ========================= Server loop =========================
+     * The following code implements a simple server loop. This loop has
+     * no demand allocation (-> can't receive capabilities) and will only
+     * dispatch to a single Epiface object.
+     * Nonetheless this loop is necessary to receive from and reply to a
+     * specific capability. In order to keep the reply capability of the
+     * client.
+     */
+    l4_msgtag_t msg = L4Re::chkipc (
+        l4_ipc_receive (worker->_thread.cap (), l4_utcb (), L4_IPC_NEVER),
+        "Worker ipc failed.");
 
-  /* Pass the IPC gate to process as parent */
-  Worker *worker = new Worker (file, cap);
-  worker->set_argv_strings ({ name.data });
-  worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=DEBUG" });
-  worker->launch ();
+    while (true)
+      {
+        /* call the corresponding function of the epiface */
+        l4_msgtag_t reply = worker_epiface->dispatch (
+            msg, 0 /* rights dont matter */, l4_utcb ());
+        /* Note: be careful can't invoke any ipc between dispatch an ipc_call
+         * (do not modify utcb) */
+        /* the exit handler will exit the worker */
+        if (not worker->alive ())
+          break;
+        /* no exit received -> wait for next RPC */
+        msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
+                           L4_IPC_NEVER);
+      }
+    exit_value = worker->get_exit_value ();
+    /* check if utcb buffer is large enough */
+    if (L4_UNLIKELY (exit_value.length () >= ret.length))
+      throw L4::Runtime_error (-L4_EMSGTOOLONG,
+                               "The utcb buffer is too small!");
+    /* delete smart pointers */
+  }
 
-  // ========================= Server loop =========================
-  /**
-   * The following code implements a simple server loop. This loop has no
-   * demand allocation (-> can't receive capabilities) and will only dispatch
-   * to a single Epiface object.
-   * Nonetheless this loop is necessary to receive from and reply to a specific
-   * capability. In order to keep the reply capability of the client.
-   */
-  l4_msgtag_t msg = L4Re::chkipc (
-      l4_ipc_receive (worker->_thread.cap (), l4_utcb (), L4_IPC_NEVER),
-      "Worker ipc failed.");
-
-  while (true)
-    {
-      /* call the corresponding function of the epiface */
-      l4_msgtag_t reply = worker_epiface->dispatch (
-          msg, 0 /* rights dont matter*/, l4_utcb ());
-      /* the exit handler will release the capability */
-      /* check if kernel object still exists */
-      if (not cap.validate ().label ())
-        break;
-      /* no exit received -> wait for next RPC */
-      msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
-                         L4_IPC_NEVER);
-    }
-
-  log_info ("Worker finished");
+  /* cp message into buffer */
+  memcpy (ret.data, exit_value.c_str (), exit_value.length () + 1);
+  ret.length = exit_value.length () + 1;
   return L4_EOK;
 }
 
@@ -249,8 +281,8 @@ struct Manager_Registry_Epiface
     /* used for sync */
     std::mutex mtx;
 
-    /* create a new server that will handle only this client (and its
-     * processes) */
+    /* create a new server that will handle only this client
+     * (and its processes) */
     /*
      * Br_manager is necessary to handle the demand of cap slots. They
      * are used e.g. to receive the Dataspace of a client while creating
@@ -260,14 +292,14 @@ struct Manager_Registry_Epiface
         = nullptr;
 
     /* start new thread handling this specific client */
-    std::thread client_handler{ [&mtx, &sync, &client_server] {
+    std::thread client_handler ([&mtx, &sync, &client_server] {
       /* Wait until registry server is created */
       std::unique_lock<std::mutex> lock{ mtx }; // acquire lock
       sync.wait (lock, [&client_server] { return client_server != nullptr; });
       lock.unlock ();
       log_info ("Start client ipc server");
       client_server->loop ();
-    } };
+    });
 
     log_debug ("created thread %ld", std::L4::thread_cap (client_handler));
 
@@ -286,7 +318,7 @@ struct Manager_Registry_Epiface
     if (L4_UNLIKELY (not cap.is_valid ()))
       {
         log_error ("Failed to register client IPC gate");
-        client_server->registry()->unregister_obj(epiface);
+        client_server->registry ()->unregister_obj (epiface);
         // TODO destroy thread
         return -L4_ENOMEM;
       }

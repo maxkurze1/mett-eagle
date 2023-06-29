@@ -12,7 +12,7 @@
 #include <l4/mett-eagle/manager>
 #include <l4/re/error_helper>
 #include <l4/re/util/env_ns>
-// #include <memory>
+#include <memory>
 #include <string>
 
 namespace L4Re
@@ -21,62 +21,34 @@ namespace L4Re
 namespace MettEagle
 {
 
-class Manager
+/**
+ * @brief Get the Manager capability as client
+ *
+ * This method can be invoked by the client to register itself and get the
+ * capability that can be used to talk to the MettEagle manager.
+ *
+ * @param cap_name            Name of the capability from the
+ *                            MettEagle::ManagerRegistry this must be created
+ *                            by ned on startup
+ * @return MettEagle::Manager Capability to a Manager Ipc_Gate
+ */
+inline static L4::Cap<L4Re::MettEagle::Manager_Client>
+getManager (const char *const cap_name)
 {
-  /* ipc of the metteagle manager */
-  L4::Cap<Manager_Client> _manager;
-
-public:
-  /**
-   * @brief Get the Manager capability as client
-   *
-   * This method can be invoked by the client to register itself and get the
-   * capability that can be used to talk to
-   * the MettEagle manager.
-   *
-   * @param cap_name            Name of the capability from the
-   *                            MettEagle::ManagerRegistry
-   * @return MettEagle::Manager Capability to a Manager Ipc_Gate
-   */
-  static Manager *
-  getInstance (const char *const cap_name)
-  {
-    auto manager = new Manager ();
-    /* get the initial ipc gate of the metteagle manager to register ourselves
-     */
-    auto manager_registry = L4Re::chkcap (
-        L4Re::Env::env ()->get_cap<MettEagle::Manager_Registry> (cap_name),
-        "Couldn't get manager_registry capability");
-    /* cap to receive new ipc gate from manager */
-    manager->_manager = L4Re::chkcap (
-        L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
-        "allocate manager capability");
-    /* register ipc call, see MettEagle::Manager_Registry */
-    L4Re::chksys (manager_registry->register_client (manager->_manager),
-                  "register_client");
-    return manager;
-  }
-
-  std::string
-  action_invoke (const char *const name)
-  {
-    L4Re::chksys (_manager->action_invoke (name), "action_invoke");
-    return "done";
-  }
-
-  void
-  action_create (const char *const name, const char *const pathname)
-  {
-    auto file
-        = L4Re::chkcap (L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname),
-                        "Couldn't find file");
-    log_info("calling create");
-    L4Re::chksys (_manager->action_create (name, file), "action_create");
-  }
-};
-
-/* alias to the getInstance method */
-constexpr auto getManager = &Manager::getInstance;
+  /* get the initial ipc gate of the metteagle manager to register ourselves
+    */
+  auto manager_registry = L4Re::chkcap (
+      L4Re::Env::env ()->get_cap<MettEagle::Manager_Registry> (cap_name),
+      "Couldn't get manager_registry capability");
+  /* cap to receive new ipc gate from manager */
+  auto manager_cap = L4Re::chkcap (
+      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
+      "allocate manager capability");
+  /* register ipc call, see MettEagle::Manager_Registry */
+  L4Re::chksys (manager_registry->register_client (manager_cap),
+                "register_client");
+  return manager_cap;
+}
 
 }
 

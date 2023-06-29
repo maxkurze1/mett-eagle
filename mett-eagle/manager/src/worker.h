@@ -1,11 +1,18 @@
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
 #pragma once
 
 #include "app_model.h"
 #include <l4/libloader/remote_app_model>
+#include <l4/re/util/cap>
 #include <l4/re/util/cap_alloc>
 #include <list>
 #include <string>
-#include <l4/re/util/cap>
 
 /**
  * App model that is really used in the end to start the worker process
@@ -34,16 +41,45 @@ private:
   std::list<std::string> _envp;
   std::list<Initial_Cap> _initial_capabilities;
 
+  bool _alive = true;
+  std::string _exit_value;
+
   Const_dataspace _bin;
 
 public:
   explicit Worker (Const_dataspace bin,
-                   L4::Cap<L4Re::Parent> const &parent,
+                   L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
                    L4::Cap<L4::Factory> const &alloc
                    = L4Re::Env::env ()->user_factory ())
       : Remote_app_model (parent, alloc), _bin (bin)
   {
   }
+
+  /**
+   * @brief Terminate process represented by object
+   *
+   * All capabilities should be unmapped
+   */
+  void
+  exit (std::string value)
+  {
+    // TODO free resources
+    _exit_value = value;
+    _alive = false;
+  }
+
+  std::string
+  get_exit_value ()
+  {
+    return _exit_value;
+  }
+
+  bool
+  alive ()
+  {
+    return _alive;
+  }
+
   /**
    * Region mapper fabric??
    */

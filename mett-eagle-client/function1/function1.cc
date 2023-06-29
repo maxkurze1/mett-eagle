@@ -3,9 +3,6 @@
 
 std::string Main(std::string args) {
   log_info("Hello from function1, param: %s", args.c_str());
-
-  L4Re::Faas::invoke("test_idk");
-  log_info("invoke returned");
-
-  return "Hello from function1";
+  std::string ans = L4Re::Faas::invoke("test_idk");
+  return "function1 idk" + ans;
 }

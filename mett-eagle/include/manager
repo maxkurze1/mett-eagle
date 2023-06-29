@@ -17,10 +17,16 @@
 #pragma once
 
 #include <l4/re/dataspace>
+#include <l4/re/error_helper>
 #include <l4/re/parent>
+#include <l4/re/util/env_ns>
+
 #include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_basics>
 #include <l4/sys/cxx/ipc_iface>
 #include <l4/sys/cxx/ipc_types>
+
+#include <string>
 
 namespace L4Re
 {
@@ -37,13 +43,14 @@ enum Protocol
   PROTO_MANAGER_CLIENT   = 0x5001,
   PROTO_MANAGER_WORKER   = 0x5002,
   PROTO_MANAGER_REGISTRY = 0x5003,
-  //clang-format on
+  // clang-format on
 };
 
 /**
  * @brief Part of the interface that will be shared by clients and workers
  */
-struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BASE>
+struct Manager_Base
+    : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BASE>
 {
   /**
    * @brief Invoke a serverless function
@@ -53,12 +60,58 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BAS
    *       started functions. So a worker wont be able to invoke a function of
    *       another client.
    *
-   * @param[in] name  Name of the serverless function to invoke
-   * @return          L4_EOK on success
-   * @return          -L4_EINVAL if the L4Re::Dataspace of the action is no
-   *                  longer valid
+   * @param[in]  name  Name of the function to invoke
+   * @param[out] ret   Return value of the function
+   *
+   * @return  L4_EOK
+   *            on success
+   * @return  -L4_EINVAL
+   *            if the L4Re::Dataspace of the action is no longer valid
+   * @return  -L4_EMSGTOOLONG
+   *            if the receive buffer of the caller is not large enough to hold
+   *            the message (with null-terminator)
    */
-  L4_INLINE_RPC (l4_msgtag_t, action_invoke, (L4::Ipc::String<> name));
+  l4_msgtag_t
+  action_invoke (L4::Ipc::String<> name, L4::Ipc::Array<char> &ret)
+  {
+    return action_invoke_t::call (c (), name, ret);
+  }
+
+  /**
+   * @brief Invoke a serverless function
+   *
+   * This is a utility function for
+   * action_invoke(L4::Ipc::String,L4::Ipc::Array<char>)
+   *
+   * This implementation will automatically create a buffer that is large
+   * enough to receive the ipc answer and convert it to a std::string.
+   *
+   * @param[in]  name  Name of the function to invoke
+   * @param[out] ret   Return value of the function
+   *
+   * @return @see action_invoke(L4::Ipc::String,L4::Ipc::Array<char>)
+   *
+   * @throws L4::Runtime_error(-L4_EMSGTOOLONG) if allocated buffer is too
+   *         small
+   */
+  l4_msgtag_t
+  action_invoke (L4::Ipc::String<> name, std::string &ret)
+  {
+    /* allocate client receive buffer with max message length */
+    char buffer[L4::Ipc::Msg::Mr_bytes];
+    L4::Ipc::Array<char> arr (sizeof (buffer), buffer);
+    l4_msgtag_t mt = action_invoke_t::call (c (), name, arr);
+    /* ret will always be 0 terminated - if not it was truncated */
+    if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))
+      throw new L4::Runtime_error (-L4_EMSGTOOLONG,
+                                   "The client receive buffer is too small");
+    /* create a std::string copy of the data */
+    ret = arr.data;
+    return mt;
+  }
+
+  L4_INLINE_RPC_NF (l4_msgtag_t, action_invoke,
+                    (L4::Ipc::String<> name, L4::Ipc::Array<char> &ret));
 
   typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
 };
@@ -73,13 +126,13 @@ struct Manager_Base : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BAS
  */
 struct Manager_Client
     : L4::Kobject_t<Manager_Client, Manager_Base, PROTO_MANAGER_CLIENT,
-                     L4::Type_info::Demand_t<1> >
+                    L4::Type_info::Demand_t<1> >
 // It is necessary to declare the Demand_t<1> to receive the file capability
 // it is also necessary to use the Br_manager to allocate the needed receive
 // capability
 {
   /**
-   * @brief Create a new 'action'
+   * @brief Create a new 'action' (= faas function)
    *
    * This will create a new action with the contents of the file.
    *
@@ -89,8 +142,36 @@ struct Manager_Client
    * @return          -L4_EINVAL if no capability was received
    * @return          -L4_ENOMEM if no server ipc gate could be allocated
    */
-  L4_INLINE_RPC (l4_msgtag_t, action_create,
-                 (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file));
+  l4_msgtag_t
+  action_create (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file)
+  {
+    return action_create_t::call (c (), name, file);
+  }
+
+  /**
+   * @brief Create a new 'action' (= faas function)
+   *
+   * Utility wrapper to search for the given file name inside the L4Re::Env_ns
+   *
+   * @param[in] name            Name of the action
+   * @param[in] pathname        L4Re::Env_ns name of the file
+   * @throws L4::Runtime_error  if file 'pathname' couldn't be found
+   * @return          L4_EOK on success
+   * @return          -L4_EINVAL if no capability was received
+   * @return          -L4_ENOMEM if no server ipc gate could be allocated
+   */
+  l4_msgtag_t
+  action_create (L4::Ipc::String<> name, const char *const pathname)
+  {
+    auto file
+        = L4Re::chkcap (L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname),
+                        "Couldn't find file");
+    return action_create_t::call (c (), name, file);
+  }
+
+  L4_INLINE_RPC_NF (l4_msgtag_t, action_create,
+                    (L4::Ipc::String<> name,
+                     L4::Ipc::Cap<L4Re::Dataspace> file));
 
   typedef L4::Typeid::Rpcs<action_create_t> Rpcs;
 };
@@ -102,8 +183,8 @@ struct Manager_Client
  * workers (e.g. a custom exit function). It also inherits the L4Re::Parent
  * interface and will be passed as the L4Re::Env::env()->parent().
  */
-struct Manager_Worker
-    : L4::Kobject_2t<Manager_Worker, Manager_Base, L4Re::Parent, PROTO_MANAGER_WORKER>
+struct Manager_Worker : L4::Kobject_2t<Manager_Worker, Manager_Base,
+                                       L4Re::Parent, PROTO_MANAGER_WORKER>
 {
   /**
    * @brief Faas specific exit functions that workers should use

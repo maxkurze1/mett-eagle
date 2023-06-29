@@ -1,5 +1,12 @@
 // -*- Mode: C++ -*-
 // vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
 #pragma once
 
 #include <l4/mett-eagle/manager>
@@ -17,20 +24,33 @@ namespace L4Re
 namespace Faas
 {
 
-/**
- * @brief Invoke another faas function from a worker
- *
- * @return std::string
- */
-std::string invoke (std::string);
 
 /**
  * @brief Utility function to get the Manager obj
- * 
+ *
  * Worker can rely on their parent implementing the worker interface
  */
-static inline L4::Cap<MettEagle::Manager_Worker> getManager(){
-  return L4::cap_cast<MettEagle::Manager_Worker> (L4Re::Env::env ()->parent ());
+static inline L4::Cap<MettEagle::Manager_Worker>
+getManager ()
+{
+  return L4::cap_cast<MettEagle::Manager_Worker> (
+      L4Re::Env::env ()->parent ());
+}
+
+/**
+ * @brief Invoke another faas function from a worker
+ *
+ * @param[in] name  The client-given name of the function
+ *
+ * @return  The returned string of the functions Main method
+ */
+static inline std::string
+invoke (std::string name)
+{
+  std::string ret;
+  L4Re::chksys (getManager ()->action_invoke (name.c_str (), ret),
+                "faas invoke");
+  return ret;
 }
 
 }
