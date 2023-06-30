@@ -19,6 +19,7 @@
 #include <thread>
 
 #include <l4/liblog/log>
+#include <l4/liblog/loggable-exception>
 #include <l4/mett-eagle/alias>
 #include <l4/mett-eagle/manager>
 
@@ -77,14 +78,14 @@ public:
                     const L4::Ipc::String_in_buf<> &name,
                     L4::Ipc::Snd_fpage file)
   {
-
     log_debug ("Create action name='%s' file passed='%d'", name.data,
                file.cap_received ());
     if (L4_UNLIKELY (not file.cap_received ()))
-      throw L4::Runtime_error (-L4_EINVAL, "No dataspace cap received");
+      throw Loggable_runtime_error (-L4_EINVAL, "No dataspace cap received");
+    if (L4_UNLIKELY (_actions->count (name.data) != 0))
+      throw Loggable_runtime_error (-L4_EEXIST, "Action '%s' already exists", name.data);
 
     /* get the received capability */
-    // TODO name collision ?
     (*_actions)[name.data] = server_iface ()->rcv_cap<L4Re::Dataspace> (0);
     if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
       throw L4::Runtime_error (-L4_ENOMEM, "Failed to realloc_rcv_cap");
@@ -296,7 +297,7 @@ struct Manager_Registry_Epiface
       lock.unlock ();
       log_info ("Start client ipc server");
       client_server->internal_loop (
-          Exc_log_dispatch<L4Re::Util::Object_registry &, L4::Runtime_error> (
+          Exc_log_dispatch<L4Re::Util::Object_registry &> (
               *client_server->registry ()),
           l4_utcb ());
     });
@@ -392,7 +393,7 @@ try
     // start server loop -- loop will not return!
     // started with custom dispatch to log errors
     register_server.internal_loop (
-        Exc_log_dispatch<L4Re::Util::Object_registry &, L4::Runtime_error> (
+        Exc_log_dispatch<L4Re::Util::Object_registry &> (
             *register_server.registry ()),
         l4_utcb ());
   }

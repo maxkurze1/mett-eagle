@@ -9,18 +9,28 @@
  */
 /**
  * @file
- * This library provides some logging utilities.
+ * This library provides the same functionality as <l4/liblob/log>, but with a
+ * nicer interface. It uses the c++20 std::source_location to avoid
+ * preprocessor macros.
  *
- * @headerfile {l4/liblog/log}
+ * @headerfile {l4/liblog/cxx20/log}
+ * 
+ * @note This interface is still WIP
  */
 
 #pragma once
 
+#if __cplusplus > 201703L && __has_builtin(__builtin_source_location)
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <iostream>
 #include <l4/cxx/exceptions>
-#include <l4/liblog/loggable-exception>
+#include <source_location>
+#include <string>
+
 namespace L4Re
 {
 
@@ -127,7 +137,6 @@ public:
     return _level.value;
   }
 
-#ifndef NDEBUG
   /**
    * @brief Write a debug message to the log
    * Note: This method will print a line break per default!
@@ -138,9 +147,14 @@ public:
    * log_debug("some debug %s", "message");
    * @endcode
    */
-#define log_debug(args...)                                                    \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::DEBUG, __FILE__,    \
-                             __FUNCTION__, __LINE__, args)
+  static inline void
+  debug (const std::string str, const std::source_location location
+                                = std::source_location::current ())
+  {
+#ifndef NDEBUG
+    print (MsgLevel::DEBUG, str, location);
+#endif
+  }
 
   /**
    * @brief Write an info message to the log
@@ -152,9 +166,14 @@ public:
    * log_info("some info %s", "message");
    * @endcode
    */
-#define log_info(args...)                                                     \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::INFO, __FILE__,     \
-                             __FUNCTION__, __LINE__, args)
+  static inline void
+  info (const std::string str,
+        const std::source_location location = std::source_location::current ())
+  {
+#ifndef NDEBUG
+    print (MsgLevel::INFO, str, location);
+#endif
+  }
 
   /**
    * @brief Write a warn message to the log
@@ -166,9 +185,14 @@ public:
    * log_warn("some warn %s", "message");
    * @endcode
    */
-#define log_warn(args...)                                                     \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::WARN, __FILE__,     \
-                             __FUNCTION__, __LINE__, args)
+  static inline void
+  warn (const std::string str,
+        const std::source_location location = std::source_location::current ())
+  {
+#ifndef NDEBUG
+    print (MsgLevel::WARN, str, location);
+#endif
+  }
 
   /**
    * @brief Write an error message to the log
@@ -180,9 +204,14 @@ public:
    * log_error("some error %s", "message");
    * @endcode
    */
-#define log_error(args...)                                                    \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::ERROR, __FILE__,    \
-                             __FUNCTION__, __LINE__, args)
+  static inline void
+  error (const std::string str, const std::source_location location
+                                = std::source_location::current ())
+  {
+#ifndef NDEBUG
+    print (MsgLevel::ERROR, str, location);
+#endif
+  }
 
   /**
    * @brief Write a fatal message to the log
@@ -194,19 +223,14 @@ public:
    * log_fatal("some fatal %s", "message");
    * @endcode
    */
-#define log_fatal(args...)                                                    \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::FATAL, __FILE__,    \
-                             __FUNCTION__, __LINE__, args)
-
-#else // ifdef NDEBUG
-
-#define log_debug(args...) (void)0
-#define log_info(args...) (void)0
-#define log_warn(args...) (void)0
-#define log_error(args...) (void)0
-#define log_fatal(args...) (void)0
-
+  static inline void
+  fatal (const std::string str, const std::source_location location
+                                = std::source_location::current ())
+  {
+#ifndef NDEBUG
+    print (MsgLevel::FATAL, str, location);
 #endif
+  }
 
   /**
    * @brief The level of a specific Log message.
@@ -248,49 +272,44 @@ public:
    * Even if args is a variadic argument template the function it still needs
    * to be defined in a header file, just like normal templates.
    */
-  template <typename... Args>
-  static int
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, char const *const fmt, Args... args)
+  static void
+  print (MsgLevel msg_lvl, const std::string msg,
+          const std::source_location location)
   {
-    /* total char count TODO n is somehow 1 off for fputs?? */
-    int n = 0;
+    if (not(msg_lvl & _level.value))
+      return;
 
-    /* check if message should be silenced */
-    if (!(msg_lvl & _level.value))
-      return 0;
+    auto &os = get_output (msg_lvl);
 
-    FILE *output = get_output (msg_lvl);
-
-    /* output current time and date */
-    n += put_time (output);
-    fputc (' ', output);
+    std::time_t result = std::time (nullptr);
+    os << std::asctime (std::localtime (&result));
 
     /* output the Level prefix */
-    n += put_severity (msg_lvl, output);
-    fputc (' ', output);
+
+    // clang-format off
+    switch (msg_lvl)
+      {
+        case MsgLevel::DEBUG: os << "\033[34;1mDEBUG\033[0m"; break;
+        case MsgLevel::INFO:  os << "\033[36;1mINFO \033[0m"; break;
+        case MsgLevel::WARN:  os << "\033[33;1mWARN \033[0m"; break;
+        case MsgLevel::ERROR: os << "\033[31;1mERROR\033[0m"; break;
+        case MsgLevel::FATAL: os << "\033[35;1mFATAL\033[0m"; break;
+      }
+    // clang-format on
 
     /* output the package name */
-    int ret = put_pkgname (output);
-    if (ret > 0)
-      {
-        n += ret;
-        fputc (' ', output);
-      }
+    const char *const name = getenv ("PKGNAME");
+    if (name == NULL)
+      return;
+    os << name;
+
 
     /* print file name */
-    n += fprintf (output, "\033[2m<%s:%d>\033[0m", rindex (file, '/') + 1,
-                  line);
-    fputc (' ', output);
+    os << "\033[2m<" << location.file_name() << ":" << location.line() << ">\033[0m";
 
-    /* print function name */
-    n += fprintf (output, "\033[2m%s:\033[0m", function);
-    fputc (' ', output);
+    os << "\033[2m" << location.function_name() << ":\033[0m";
 
-    /* output message */
-    n += fprintf (output, fmt, args...);
-    fputc ('\n', output);
-    return n;
+    os << msg << std::endl;
   }
 
   /**
@@ -311,14 +330,15 @@ public:
    *   }
    * @endcode
    *
-   * All argument are just passed to the general Log::printf
+   * All argument are just passed to the general Log::print
    */
-  static int
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, L4::Base_exception &exception)
-  {
-    return printf (msg_lvl, file, function, line, "%s", exception.str ());
-  }
+  // static int
+  // print (MsgLevel msg_lvl, char const *const file, char const *const
+  // function,
+  //         const int line, L4::Base_exception &exception)
+  // {
+  //   return print (msg_lvl, file, function, line, "%s", exception.str ());
+  // }
 
   /**
    * @brief Helper method to log Runtime_error
@@ -339,45 +359,15 @@ public:
    *   }
    * @endcode
    */
-  static int
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, L4::Runtime_error &exception)
-  {
-    return printf (msg_lvl, file, function, line, "%s: %s", exception.str (),
-                   exception.extra_str ());
-  }
-
-  /**
-   * @brief Helper method to log Loggable_errors
-   *
-   * This method will be called for Loggable_errors.
-   * It will print the message of the error together with the location where
-   * the error was thrown. (For all other error types only the location of the
-   * printing statement will be logged)
-   *
-   * Example:
-   * @code{.cpp}
-   * try
-   *   {
-   *    // anything ...
-   *   }
-   * catch (L4Re::LibLog::Loggable_error &exc)
-   *   {
-   *     log_fatal(exc);
-   *   }
-   * @endcode
-   */
-  static int
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, Loggable_error &exc)
-  {
-    /* location of print statement is discarded */
-    (void)file;
-    (void)function;
-    (void)line;
-    return printf (msg_lvl, exc.file (), exc.function (), exc.line (),
-                   "%s: %s", exc.str (), exc.msg ());
-  }
+  // static int
+  // print (MsgLevel msg_lvl, char const *const file, char const *const
+  // function,
+  //         const int line, L4::Runtime_error &exception)
+  // {
+  //   return print (msg_lvl, file, function, line, "%s: %s", exception.str
+  //   (),
+  //                  exception.extra_str ());
+  // }
 
 private:
   /**
@@ -430,22 +420,26 @@ private:
   static Level _level;
 
   /**
-   * @brief Get the output 'FILE *'-object
+   * @brief Get the output std::ostream-object
    *
    * @param msg_lvl  The level that will be printed
-   * @return stdout  if level is INFO or DEBUG
-   * @return stderr  if level if WARN or higher
+   * @return std::clog  if level is INFO or DEBUG
+   * @return std::cerr  if level if WARN or higher
    */
-  static FILE *
+  static std::ostream &
   get_output (MsgLevel msg_lvl)
   {
-    if (msg_lvl & Level::WARN)
-      return stderr;
+    if (msg_lvl & Level::WARN) // warn or higher
+      return std::cerr;
     else
-      return stdout;
+      return std::clog;
   }
 };
-
+}
 }
 
-}
+#else
+
+#error "This interface only works with c++20 - have a look at the docs"
+
+#endif

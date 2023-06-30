@@ -19,14 +19,14 @@ try
     (void)_argc;
     (void)_argv;
 
-    log_debug ("Hello from client");
+    log_debug ("Hello from client c version %ld", __cplusplus);
 
     auto manager = MettEagle::getManager ("manager");
 
     log_debug ("Register done");
 
     L4Re::chksys(manager->action_create ("test", "rom/function1"), "action create");
-    manager->action_create ("test_idk", "rom/function2");
+    L4Re::chksys(manager->action_create ("test_idk", "rom/function2"), "action create");
     
     log_debug ("create done");
     
@@ -36,6 +36,11 @@ try
     log_debug("got answer %s", answer.c_str());
 
     return EXIT_SUCCESS;
+  }
+catch (L4Re::LibLog::Loggable_error &e)
+  {
+    log_fatal (e);
+    return e.err_no ();
   }
 catch (L4::Runtime_error &e)
   {

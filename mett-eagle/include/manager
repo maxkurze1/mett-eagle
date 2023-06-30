@@ -26,6 +26,8 @@
 #include <l4/sys/cxx/ipc_iface>
 #include <l4/sys/cxx/ipc_types>
 
+#include <l4/liblog/loggable-exception>
+
 #include <string>
 
 namespace L4Re
@@ -91,8 +93,8 @@ struct Manager_Base
    *
    * @return @see action_invoke(L4::Ipc::String,L4::Ipc::Array<char>)
    *
-   * @throws L4::Runtime_error(-L4_EMSGTOOLONG) if allocated buffer is too
-   *         small
+   * @throws L4Re::LibLog::Loggable_error(-L4_EMSGTOOLONG) if allocated buffer
+   * is too small
    */
   l4_msgtag_t
   action_invoke (L4::Ipc::String<> name, std::string &ret)
@@ -103,8 +105,8 @@ struct Manager_Base
     l4_msgtag_t mt = action_invoke_t::call (c (), name, arr);
     /* ret will always be 0 terminated - if not it was truncated */
     if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))
-      throw L4::Runtime_error (-L4_EMSGTOOLONG,
-                                   "The client receive buffer is too small");
+      throw Loggable_runtime_error (-L4_EMSGTOOLONG,
+                                    "The client receive buffer is too small");
     /* create a std::string copy of the data */
     ret = arr.data;
     return mt;
@@ -141,6 +143,7 @@ struct Manager_Client
    * @return          L4_EOK on success
    * @return          -L4_EINVAL if no capability was received
    * @return          -L4_ENOMEM if no server ipc gate could be allocated
+   * @return          -L4_EEXIST if name is already in use
    */
   l4_msgtag_t
   action_create (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file)
@@ -155,17 +158,18 @@ struct Manager_Client
    *
    * @param[in] name            Name of the action
    * @param[in] pathname        L4Re::Env_ns name of the file
-   * @throws L4::Runtime_error  if file 'pathname' couldn't be found
+   * @throws L4Re::LibLog::Loggable_error  if file 'pathname' couldn't be found
    * @return          L4_EOK on success
    * @return          -L4_EINVAL if no capability was received
    * @return          -L4_ENOMEM if no server ipc gate could be allocated
+   * @return          -L4_EEXIST if name is already in use
    */
   l4_msgtag_t
   action_create (L4::Ipc::String<> name, const char *const pathname)
   {
-    auto file
-        = L4Re::chkcap (L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname),
-                        "Couldn't find file");
+    auto file = L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname);
+    if (L4_UNLIKELY(not file.is_valid()))
+      throw Loggable_runtime_error(-L4_EINVAL,"Couldn't find file '%s'", pathname);
     return action_create_t::call (c (), name, file);
   }
 

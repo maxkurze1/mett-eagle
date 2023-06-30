@@ -8,6 +8,7 @@
 
 #include <l4/libfaas/faas>
 #include <l4/liblog/log>
+#include <l4/liblog/loggable-exception>
 
 #include <l4/mett-eagle/alias>
 
@@ -27,7 +28,8 @@ try
   {
     /* there has to be exactly one argument -- the string passed */
     if (L4_UNLIKELY (argc != 1))
-      throw L4::Runtime_error (-L4_EINVAL, "Wrong arguments");
+      throw Loggable_runtime_error (
+          -L4_EINVAL, "Wrong number of arguments. Expected 1 got %d", argc);
 
     /* actual call to the faas function */
     std::string ret{ Main (argv[0]) };
@@ -36,20 +38,24 @@ try
      * to pass a string the custom manager->exit must be used.     */
     L4Re::chksys (L4Re::Faas::getManager ()->exit (ret.c_str ()), "exit rpc");
 
-    throw L4::Runtime_error (-L4_EFAULT,
-                             "Wrapper main should never get here!");
+    __builtin_unreachable();
+  }
+/**
+ * These catch blocks will catch errors that are thrown by utility
+ * methods like L4Re::chkcap or by the faas function
+ */
+catch (L4Re::LibLog::Loggable_error &e)
+  {
+    log_fatal (e);
+    return e.err_no (); // propagate the error to the client
   }
 catch (L4::Runtime_error &e)
   {
-    /**
-     * This catch block will catch errors that are thrown by utility
-     * methods like L4Re::chkcap or by the faas function
-     */
     log_fatal (e);
     return e.err_no (); // propagate the error to the client
   }
 catch (... /* catch all */)
   {
-    log_fatal("Function threw unknown error.");
+    log_fatal ("Function threw unknown error.");
     return -L4_EINVAL;
   }

@@ -10,10 +10,10 @@
 #include <ctime>
 #include <l4/liblog/log>
 
-L4Re::LibLog::Level L4Re::LibLog::_level;
+L4Re::LibLog::Log::Level L4Re::LibLog::Log::_level;
 
 int
-L4Re::LibLog::put_severity (MsgLevel msg_lvl, FILE *output)
+L4Re::LibLog::Log::put_severity (MsgLevel msg_lvl, FILE *output)
 {
   switch (msg_lvl)
     {
@@ -32,7 +32,7 @@ L4Re::LibLog::put_severity (MsgLevel msg_lvl, FILE *output)
 }
 
 int
-L4Re::LibLog::put_time (FILE *output)
+L4Re::LibLog::Log::put_time (FILE *output)
 {
 
   struct timespec ts;
@@ -46,7 +46,7 @@ L4Re::LibLog::put_time (FILE *output)
 }
 
 int
-L4Re::LibLog::put_pkgname (FILE *output)
+L4Re::LibLog::Log::put_pkgname (FILE *output)
 {
   const char *const name = getenv ("PKGNAME");
   if (name == NULL)

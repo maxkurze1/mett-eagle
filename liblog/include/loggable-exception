@@ -1,0 +1,155 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
+/**
+ * @file
+ * This file provides an exception class with special
+ * logging functionality.
+ *
+ * @headerfile {l4/liblog/log}
+ */
+
+#pragma once
+
+#include <cstdio>
+#include <cstdlib>
+#include <l4/cxx/exceptions>
+
+namespace L4Re
+{
+
+namespace LibLog
+{
+
+/**
+ * @brief An exception class with special logging functionalities
+ *
+ * This class provides the ability to pass a c-like format string and arguments
+ * to an exception.
+ *
+ * It also provides a helper macro to track the location that threw the error.
+ * These information will be used automatically by the logging functions.
+ * 
+ * Example:
+ * @code{.cpp}
+ * #include <l4/liblog/log>
+ * #include <l4/liblog/loggable-exception>
+ * 
+ * void function(const char *name)
+ * {
+ *   if (...)
+ *     throw Loggable_runtime_error(-L4_EINVAL,"Bad name '%s'", name);
+ * }
+ * 
+ * try
+ * {
+ *   function(...);
+ * }
+ * catch (L4Re::LibLog::Loggable_error &e)
+ * {
+ *   log_fatal (e);
+ * }
+ * @endcode 
+ */
+class Loggable_error : public L4::Base_exception
+{
+protected:
+  char *_msg = NULL;
+  const long _errno;
+  const char *_file = NULL;
+  const char *_function = NULL;
+  const int _line = -1;
+
+public:
+  /**
+   * Create a loggable exception from a format string.
+   */
+  template <typename... Args>
+  Loggable_error (long err_no, char const *const fmt = NULL,
+                  Args... args) noexcept
+      : Loggable_error (NULL, NULL, -1, err_no, fmt, args...)
+  {
+  }
+
+  template <typename... Args>
+  Loggable_error (char const *const file, char const *const func,
+                  const int line, long err_no, char const *const fmt = NULL,
+                  Args... args) noexcept : _errno (err_no),
+                                           _file (file),
+                                           _function (func),
+                                           _line (line)
+  {
+    if (fmt == NULL)
+      return;
+    asprintf (&_msg, fmt, args...);
+  }
+
+  /**
+   * Destructor has to free the message of the exception
+   */
+  ~Loggable_error () noexcept { free (_msg); }
+
+#define Loggable_runtime_error(err_no, args...)                               \
+  L4Re::LibLog::Loggable_error (__FILE__, __FUNCTION__, __LINE__, err_no, args)
+
+  char const *
+  str () const noexcept override
+  {
+    return l4sys_errtostr (_errno);
+  }
+
+  /**
+   * @brief Get the message of this runtime error.
+   */
+  char const *
+  msg () const
+  {
+    return _msg;
+  }
+
+  /**
+   * @brief Get the error value for this runtime error.
+   */
+  long
+  err_no () const noexcept
+  {
+    return _errno;
+  }
+
+  /**
+   * @brief The name of the file that threw the error
+   */
+  char const *
+  file () const
+  {
+    return _file;
+  }
+
+  /**
+   * @brief The name of the function that threw the error
+   */
+  char const *
+  function () const
+  {
+    return _function;
+  }
+
+  /**
+   * @brief The line of the file that threw the error
+   */
+  int
+  line () const
+  {
+    return _line;
+  }
+};
+
+}
+
+}

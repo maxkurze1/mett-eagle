@@ -9,6 +9,7 @@
 
 #include <l4/cxx/exceptions>
 #include <l4/liblog/log>
+#include <l4/liblog/loggable-exception>
 #include <l4/sys/cxx/ipc_server_loop>
 
 /**
@@ -18,7 +19,7 @@
  * It will catch errors like L4::Ipc::svr::Exc_dispatch and log
  * them using the liblog.
  */
-template <typename R, typename Exc = L4::Runtime_error>
+template <typename R>
 struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
 {
   Exc_log_dispatch (R r) : L4::Ipc_svr::Direct_dispatch<R> (r) {}
@@ -34,11 +35,20 @@ struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
       {
         return L4::Ipc_svr::Direct_dispatch<R>::operator() (tag, obj, utcb);
       }
-    catch (Exc &e)
+    catch (L4Re::LibLog::Loggable_error &e)
       {
-        /* log the error */
         log_error (e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
+      }
+    catch (L4::Runtime_error &e)
+      {
+        log_error (e);
+        return l4_msgtag (e.err_no (), 0, 0, 0);
+      }
+    catch (L4::Base_exception &e)
+      {
+        log_error (e);
+        return l4_msgtag (-L4_EINVAL, 0, 0, 0);
       }
     catch (long err)
       {

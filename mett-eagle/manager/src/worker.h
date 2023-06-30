@@ -99,7 +99,7 @@ public:
   //   _rm.reset ();
 
   //   _r->unregister_obj (this);
-  // }s
+  // }
 
   /**
    * Pushing the names of the initial capabilities to the stack ??
@@ -268,6 +268,11 @@ public:
   add_initial_capability (L4::Cap<void> cap, std::string name,
                           unsigned rights = 16, unsigned flags = 16)
   {
+    if (not l4re_env_cap_entry_t::is_valid_name (name.c_str ()))
+      {
+        log_error ("Capability name '%s' too long", name);
+        return;
+      }
     _initial_capabilities.push_back ({ cap, name, rights, flags });
   }
 

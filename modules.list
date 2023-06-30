@@ -11,14 +11,16 @@ entry mett-eagle
     module mett-eagle
     module mett-eagle-client
 
-entry python
+entry mett-eagle-python
     kernel fiasco -serial_esc
-    roottask moe rom/python.cfg
-    module python.cfg
-    module python
+    roottask moe rom/mett-eagle.cfg
+    module mett-eagle.cfg
+    module mett-eagle
+    module mett-eagle-client
     module l4re
+    module function1
     module ned
-    module thread.py
+    module test.py
 
     module libld-l4.so
     module libc_be_sig.so

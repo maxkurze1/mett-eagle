@@ -36,7 +36,7 @@ inline static L4::Cap<L4Re::MettEagle::Manager_Client>
 getManager (const char *const cap_name)
 {
   /* get the initial ipc gate of the metteagle manager to register ourselves
-    */
+   */
   auto manager_registry = L4Re::chkcap (
       L4Re::Env::env ()->get_cap<MettEagle::Manager_Registry> (cap_name),
       "Couldn't get manager_registry capability");
