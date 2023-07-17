@@ -7,6 +7,13 @@
  * GNU General Public License 2.
  * Please see the COPYING-GPL-2 file for details.
  */
+/**
+ * @file
+ * Some utility methods for use by the workers/faas function.
+ *
+ * @headerfile <l4/mett-eagle/util>
+ */
+
 #pragma once
 
 #include <l4/mett-eagle/manager>
@@ -28,7 +35,7 @@ namespace Faas
 /**
  * @brief Utility function to get the Manager obj
  *
- * Worker can rely on their parent implementing the worker interface
+ * Worker has to rely on their parent implementing the worker interface
  */
 static inline L4::Cap<MettEagle::Manager_Worker>
 getManager ()

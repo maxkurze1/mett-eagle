@@ -12,6 +12,8 @@
 
 #include <l4/re/error_helper>
 
+using L4Re::LibLog::Log;
+
 int
 main (const int _argc, const char *const _argv[])
 try
@@ -19,31 +21,31 @@ try
     (void)_argc;
     (void)_argv;
 
-    log_debug ("Hello from client c version %ld", __cplusplus);
+    Log::debug ("Hello from client c version %ld", __cplusplus);
 
     auto manager = MettEagle::getManager ("manager");
 
-    log_debug ("Register done");
+    Log::debug ("Register done");
 
     L4Re::chksys(manager->action_create ("test", "rom/function1"), "action create");
     L4Re::chksys(manager->action_create ("test_idk", "rom/function2"), "action create");
     
-    log_debug ("create done");
+    Log::debug ("create done");
     
     std::string answer;
     L4Re::chksys (manager->action_invoke ("test", answer), "action invoke");
 
-    log_debug("got answer %s", answer.c_str());
+    Log::debug("got answer %s", answer.c_str());
 
     return EXIT_SUCCESS;
   }
-catch (L4Re::LibLog::Loggable_error &e)
+catch (L4Re::LibLog::Loggable_base_exception &e)
   {
-    log_fatal (e);
+    Log::fatal {e};
     return e.err_no ();
   }
 catch (L4::Runtime_error &e)
   {
-    log_fatal (e);
+    Log::fatal {e};
     return e.err_no ();
   }

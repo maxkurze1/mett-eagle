@@ -1,3 +1,5 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
 /**
  * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
  *
@@ -35,24 +37,24 @@ struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
       {
         return L4::Ipc_svr::Direct_dispatch<R>::operator() (tag, obj, utcb);
       }
-    catch (L4Re::LibLog::Loggable_error &e)
+    catch (L4Re::LibLog::Loggable_base_exception &e)
       {
-        log_error (e);
+        L4Re::LibLog::Log::error {e};
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Runtime_error &e)
       {
-        log_error (e);
+        L4Re::LibLog::Log::error {e};
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Base_exception &e)
       {
-        log_error (e);
+        L4Re::LibLog::Log::error<L4::Base_exception &> {e};
         return l4_msgtag (-L4_EINVAL, 0, 0, 0);
       }
     catch (long err)
       {
-        log_error (l4sys_errtostr (err));
+        L4Re::LibLog::Log::error (l4sys_errtostr (err));
         return l4_msgtag (err, 0, 0, 0);
       }
   }

@@ -17,6 +17,8 @@
 #include <l4/liblog/log>
 #include <l4/re/util/debug>
 
+using L4Re::LibLog::Log;
+
 /**
  * @brief This call will provide all functions that are needed but not
  * implemented by Base_app_model/Loader and Remote_app_model
@@ -138,15 +140,19 @@ struct App_model : public Ldr::Base_app_model<Stack>
                                       & (~0UL << L4_FPAGE_ADDR_SHIFT));
 
     // test whether intersection between provided cpu set and online cpu set
-    // is empty, in that case warn that the thread _may_ never run
+    // is empty, in that case warn that the thread _may_ never run 
     l4_umword_t cpu_max;
     l4_sched_cpu_set_t cpus = sp.affinity;
     l4_msgtag_t t = scheduler->info (&cpu_max, &cpus);
     if (l4_error (t))
       return t;
+      
+    Log::debug("cpu-max %ld", cpu_max);
+    Log::debug("cpu-map %ld", cpus.map);
+    Log::debug("sp.affinity.map %ld", sp.affinity.map);
 
     if (!(cpus.map & sp.affinity.map))
-      log_warn ("warning: Launching thread on offline CPU. Thread may never run!");
+      Log::warn ("warning: Launching thread on offline CPU. Thread may never run!");
 
     return scheduler->run_thread (thread, sp);
   }

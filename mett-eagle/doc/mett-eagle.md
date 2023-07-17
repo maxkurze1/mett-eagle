@@ -1,7 +1,7 @@
 # Mett Eagle
 
-Mett Eagle is an L4 server that provides serverless function execution. Clients
-can upload serverless functions and invoke them.
+Mett Eagle is an L4 server that provides a serverless function platform. Clients
+of this server can upload serverless functions and invoke them via ipc.
 
 # Multithreading
 

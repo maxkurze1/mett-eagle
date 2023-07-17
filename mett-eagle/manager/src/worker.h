@@ -59,6 +59,8 @@ public:
    * @brief Terminate process represented by object
    *
    * All capabilities should be unmapped
+   *
+   * @param value  This string should hold the exit value of the process
    */
   void
   exit (std::string value)
@@ -68,14 +70,20 @@ public:
     _alive = false;
   }
 
+  /**
+   * @brief Get the exit value
+   */
   std::string
-  get_exit_value ()
+  get_exit_value () const
   {
     return _exit_value;
   }
 
+  /**
+   * Used to check if the worker process already sent the exit ipc
+   */
   bool
-  alive ()
+  alive () const
   {
     return _alive;
   }
@@ -115,7 +123,7 @@ public:
         auto name = init_cap.name.c_str ();
         if (not l4re_env_cap_entry_t::is_valid_name (name))
           {
-            log_error ("Capability name '%s' too long", name);
+            Log::error ("Capability name '%s' too long", name);
             continue;
           }
         _stack.push (
@@ -264,18 +272,31 @@ public:
     _envp = envp;
   }
 
+  /**
+   * This function can be used to configure a capability that should be
+   * mapped to the new process once it will be created. It will be added to the
+   * so called 'initial capabilities'
+   *
+   * @param cap     The capability that should be mapped
+   * @param name    Name of the capability inside the new process
+   * @param rights  The rights that should be mapped
+   * @param flags   TODO flags?
+   */
   void
   add_initial_capability (L4::Cap<void> cap, std::string name,
                           unsigned rights = 16, unsigned flags = 16)
   {
     if (not l4re_env_cap_entry_t::is_valid_name (name.c_str ()))
       {
-        log_error ("Capability name '%s' too long", name);
+        Log::error ("Capability name '%s' too long", name);
         return;
       }
     _initial_capabilities.push_back ({ cap, name, rights, flags });
   }
 
+  /**
+   * Creates an Ldr::Elf_loader and uses it to start this new process
+   */
   void
   launch ()
   {

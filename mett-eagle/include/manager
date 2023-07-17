@@ -93,7 +93,7 @@ struct Manager_Base
    *
    * @return @see action_invoke(L4::Ipc::String,L4::Ipc::Array<char>)
    *
-   * @throws L4Re::LibLog::Loggable_error(-L4_EMSGTOOLONG) if allocated buffer
+   * @throws L4Re::LibLog::Loggable_exception(-L4_EMSGTOOLONG) if allocated buffer
    * is too small
    */
   l4_msgtag_t
@@ -103,9 +103,9 @@ struct Manager_Base
     char buffer[L4::Ipc::Msg::Mr_bytes];
     L4::Ipc::Array<char> arr (sizeof (buffer), buffer);
     l4_msgtag_t mt = action_invoke_t::call (c (), name, arr);
-    /* ret will always be 0 terminated - if not it was truncated */
+    /* ret will always be 0 terminated - if not, it was truncated */
     if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))
-      throw Loggable_runtime_error (-L4_EMSGTOOLONG,
+      throw LibLog::Loggable_exception (-L4_EMSGTOOLONG,
                                     "The client receive buffer is too small");
     /* create a std::string copy of the data */
     ret = arr.data;
@@ -158,7 +158,7 @@ struct Manager_Client
    *
    * @param[in] name            Name of the action
    * @param[in] pathname        L4Re::Env_ns name of the file
-   * @throws L4Re::LibLog::Loggable_error  if file 'pathname' couldn't be found
+   * @throws L4Re::LibLog::Loggable_exception  if file 'pathname' couldn't be found
    * @return          L4_EOK on success
    * @return          -L4_EINVAL if no capability was received
    * @return          -L4_ENOMEM if no server ipc gate could be allocated
@@ -168,8 +168,9 @@ struct Manager_Client
   action_create (L4::Ipc::String<> name, const char *const pathname)
   {
     auto file = L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname);
-    if (L4_UNLIKELY(not file.is_valid()))
-      throw Loggable_runtime_error(-L4_EINVAL,"Couldn't find file '%s'", pathname);
+    if (L4_UNLIKELY (not file.is_valid ()))
+      throw LibLog::Loggable_exception (-L4_EINVAL, "Couldn't find file '%s'",
+                                    std::make_tuple(pathname));
     return action_create_t::call (c (), name, file);
   }
 

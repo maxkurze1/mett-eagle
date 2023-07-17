@@ -7,7 +7,6 @@
  */
 
 #include "app_model.h"
-#include "exc_log_dispatch.h"
 #include "worker.h"
 
 #include <condition_variable>
@@ -18,6 +17,7 @@
 #include <string>
 #include <thread>
 
+#include <l4/liblog/exc_log_dispatch>
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
 #include <l4/mett-eagle/alias>
@@ -35,6 +35,8 @@
 #include <l4/sys/thread>
 
 #include <thread-l4>
+
+using L4Re::LibLog::Loggable_exception;
 
 struct Manager_Base_Epiface : L4::Epiface_t0<MettEagle::Manager_Base>
 {
@@ -78,17 +80,18 @@ public:
                     const L4::Ipc::String_in_buf<> &name,
                     L4::Ipc::Snd_fpage file)
   {
-    log_debug ("Create action name='%s' file passed='%d'", name.data,
-               file.cap_received ());
+    Log::debug ("Create action name='%s' file passed='%d'", name.data,
+                file.cap_received ());
     if (L4_UNLIKELY (not file.cap_received ()))
-      throw Loggable_runtime_error (-L4_EINVAL, "No dataspace cap received");
+      throw Loggable_exception (-L4_EINVAL, "No dataspace cap received");
     if (L4_UNLIKELY (_actions->count (name.data) != 0))
-      throw Loggable_runtime_error (-L4_EEXIST, "Action '%s' already exists", name.data);
+      throw Loggable_exception (-L4_EEXIST, "Action '%s' already exists",
+                                name.data);
 
     /* get the received capability */
     (*_actions)[name.data] = server_iface ()->rcv_cap<L4Re::Dataspace> (0);
     if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
-      throw L4::Runtime_error (-L4_ENOMEM, "Failed to realloc_rcv_cap");
+      throw Loggable_exception (-L4_ENOMEM, "Failed to realloc_rcv_cap");
     return L4_EOK;
   }
 };
@@ -134,7 +137,9 @@ public:
       {
         /* faas function probably threw an error   *
          * in this case value holds the error code */
-        log_error ("Worker finished with wrong exit! Err: %d", val);
+        Log::error ("Worker finished with wrong exit! - it probably threw and "
+                    "error - Err: %d",
+                    val);
         // TODO return error to parent
         // TODO maybe better to delete cap??
         _worker->exit ("");
@@ -149,11 +154,12 @@ public:
     /* do nothing per default */
     return L4_EOK;
   }
+
   long
   op_exit (MettEagle::Manager_Worker::Rights,
            const L4::Ipc::String_in_buf<> &value)
   {
-    log_debug ("Worker exit: %s", value.data);
+    Log::debug ("Worker exit: %s", value.data);
     // terminate ();
     _worker->exit (value.data);
     L4Re::Env::env ()->task ()->release_cap (obj_cap ());
@@ -170,24 +176,18 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                                         const L4::Ipc::String_in_buf<> &name,
                                         L4::Ipc::Array_ref<char> &ret)
 {
-  log_debug ("Invoke action name='%s'", name.data);
+  Log::debug ("Invoke action name='%s'", name.data);
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name.data) == 0))
-    {
-      // TODO string memory leak?
-      std::unique_ptr<char> ptr;
-      char *string;
-      asprintf (&string, "Action '%s' doesn't exist", name.data);
-      ptr.reset (string);
-      throw L4::Runtime_error (-L4_EINVAL, string);
-    }
+    throw Loggable_exception (-L4_EINVAL, "Action '%s' doesn't exist",
+                              name.data);
 
   /* cap can be unmapped anytime ... TODO add try catch or some error
    * handling
    */
   L4::Cap<L4Re::Dataspace> file = (*_actions)[name.data];
   if (not file.validate ().label ())
-    throw L4::Runtime_error (-L4_EINVAL, "dataspace invalid");
+    throw Loggable_exception (-L4_EINVAL, "dataspace invalid");
 
   // TODO extract to own function
   std::string exit_value;
@@ -253,8 +253,8 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     exit_value = worker->get_exit_value ();
     /* check if utcb buffer is large enough */
     if (L4_UNLIKELY (exit_value.length () >= ret.length))
-      throw L4::Runtime_error (-L4_EMSGTOOLONG,
-                               "The utcb buffer is too small!");
+      throw Loggable_exception (-L4_EMSGTOOLONG,
+                                "The utcb buffer is too small!");
     /* delete smart pointers */
   }
 
@@ -272,7 +272,7 @@ struct Manager_Registry_Epiface
       MettEagle::Manager_Registry::Rights,
       L4::Ipc::Cap<MettEagle::Manager_Client> &manager_ipc_gate)
   {
-    log_debug ("Registering client");
+    Log::debug ("Registering client");
 
     /* sync client and server */
     std::condition_variable sync;
@@ -295,14 +295,14 @@ struct Manager_Registry_Epiface
       std::unique_lock<std::mutex> lock{ mtx }; // acquire lock
       sync.wait (lock, [&client_server] { return client_server != nullptr; });
       lock.unlock ();
-      log_info ("Start client ipc server");
+      Log::info ("Start client ipc server");
       client_server->internal_loop (
           Exc_log_dispatch<L4Re::Util::Object_registry &> (
               *client_server->registry ()),
           l4_utcb ());
     });
 
-    log_debug ("created thread %ld", std::L4::thread_cap (client_handler));
+    Log::debug ("created thread %ld", std::L4::thread_cap (client_handler));
 
     std::unique_lock<std::mutex> lock{ mtx }; // acquire lock
     client_server
@@ -320,8 +320,8 @@ struct Manager_Registry_Epiface
       {
         client_server->registry ()->unregister_obj (epiface);
         // TODO destroy thread -- done by discarding the handle?
-        throw L4::Runtime_error (-L4_ENOMEM,
-                                 "Failed to register client IPC gate");
+        throw Loggable_exception (-L4_ENOMEM,
+                                  "Failed to register client IPC gate");
       }
     /* notify thread */
     lock.unlock ();
@@ -379,6 +379,39 @@ try
         auxp += 2;
       }
 
+    L4::Cap<L4::Scheduler> scheduler (L4Re::Env::env ()->scheduler ());
+
+    auto sched_cap = L4Re::Util::cap_alloc.alloc<L4::Scheduler> ();
+
+    l4_umword_t limit = 99;
+    l4_umword_t offset = 0;
+    l4_umword_t bitmap = ~0UL;
+    L4Re::chksys (
+        l4_msgtag_t (
+            L4Re::Env::env ()->user_factory ()->create<L4::Scheduler> (
+                sched_cap)
+            << l4_mword_t (limit) << l4_mword_t (offset)
+            << l4_umword_t (bitmap)),
+        "Failed to create scheduler");
+
+    // test whether intersection between provided cpu set and online cpu set
+    // is empty, in that case warn that the thread _may_ never run
+    l4_umword_t cpu_max;
+    l4_sched_cpu_set_t cpus{ .gran_offset = 0 << 24 | 0, .map = ~0UL };
+    L4Re::chksys (scheduler->info (&cpu_max, &cpus),
+                  "failed to query scheduler info");
+
+    Log::debug ("cpu-max %ld", cpu_max);
+    Log::debug ("cpu-map %ld", cpus.map);
+
+    Log::debug ("cpu 2 online %d", scheduler->is_online (2));
+
+    L4Re::chksys (sched_cap->info (&cpu_max, &cpus),
+                  "failed to query own scheduler info");
+
+    Log::debug ("own cpu-max %ld", cpu_max);
+    Log::debug ("own cpu-map %ld", cpus.map);
+
     /*
      * Associate the 'server' endpoint that was already 'reserved' by ned
      * with a newly created interface implementation
@@ -388,7 +421,7 @@ try
             new Manager_Registry_Epiface (), "server"),
         "Couldn't register service, is there a 'server' in the caps table?");
 
-    log_info ("Started Mett-Eagle server!");
+    Log::info ("Started Mett-Eagle server!");
 
     // start server loop -- loop will not return!
     // started with custom dispatch to log errors
@@ -402,6 +435,11 @@ catch (L4::Runtime_error &e)
     /**
      * Catch all errors (e.g. from chkcap) and log some message
      */
-    log_fatal (e);
+    Log::fatal{ e };
+    return e.err_no ();
+  }
+catch (L4Re::LibLog::Loggable_base_exception &e)
+  {
+    Log::fatal{ e };
     return e.err_no ();
   }

@@ -19,15 +19,24 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <stdexcept>
+#include <string>
+
 #include <l4/cxx/exceptions>
 #include <l4/liblog/loggable-exception>
+#include <l4/re/env>
+
 namespace L4Re
 {
 
 namespace LibLog
 {
 
-class Log
+/**
+ * @brief A utility class for a nice formatted log output
+ */
+class L4_EXPORT Log
 {
 public:
   /**
@@ -35,7 +44,11 @@ public:
    *
    * This level will control which log messages are written
    * to the ouput and which will silently return.
-   * Note: the default Level will be INFO
+   *
+   * @note the default Level will be INFO
+   *
+   * @note the level will only be saved inside the environment variable
+   *       'LOG_LEVEL'
    *
    * A level will by default also activate all higher levels.
    * the versions prefixed with _ONLY can be used to construct
@@ -43,54 +56,18 @@ public:
    *
    * For example:
    * @code{.cpp}
-   * L4Re::LibLog::setLevel(L4Re::LibLog::Level::DEBUG_ONLY |
-   *   L4Re::LibLog::Level::ERROR_ONLY)
-   * @endcode
+   * L4Re::LibLog::setLevel(L4Re::LibLog::Level::WARN);
+   * // all messages with warn or higher
+   * // -> warn, error, fatal
    *
-   * will only output debug and error messages.
+   * L4Re::LibLog::setLevel(L4Re::LibLog::Level::DEBUG_ONLY |
+   *   L4Re::LibLog::Level::ERROR_ONLY);
+   * // only debug and error messages.
+   * @endcode
    */
   class Level
   {
   public:
-    /**
-     * This variable hold the actual level value
-     */
-    l4_uint8_t value;
-
-    /**
-     * @brief Construct from a given enum value
-     */
-    Level (l4_uint8_t v) : value (v){};
-
-    /**
-     * @brief Construct from the LOG_LEVEL environment
-     *
-     * Will try to initialize with the value of the LOG_LEVEL
-     * environment variable or default to 'INFO' if it is not set.
-     */
-    Level ()
-    {
-      const char *const level = getenv ("LOG_LEVEL");
-      if (level == NULL)
-        {
-          value = INFO;
-          return;
-        }
-
-      if (strcasecmp (level, "DEBUG") == 0)
-        value = DEBUG;
-      else if (strcasecmp (level, "INFO") == 0)
-        value = INFO;
-      else if (strcasecmp (level, "WARN") == 0)
-        value = WARN;
-      else if (strcasecmp (level, "ERROR") == 0)
-        value = ERROR;
-      else if (strcasecmp (level, "FATAL") == 0)
-        value = FATAL;
-      else
-        value = INFO;
-    }
-
     // clang-format off
     enum : l4_uint8_t
     {
@@ -112,101 +89,26 @@ public:
   /**
    * @brief Set the output level of the log
    */
-  static void
+  inline static void
   setLevel (l4_uint8_t lvl)
   {
-    _level.value = lvl;
+    setenv ("LOG_LEVEL", std::to_string (lvl).c_str (), true);
   }
 
   /**
    * @brief Get the output log level
    */
-  static l4_uint8_t
+  inline static l4_uint8_t
   getLevel ()
   {
-    return _level.value;
+    char *lvl = getenv ("LOG_LEVEL");
+    // clang-format off
+    if (lvl)
+      try { return std::stoi (lvl); }
+      catch (std::invalid_argument &) {}
+    // clang-format on
+    return Level::INFO;
   }
-
-#ifndef NDEBUG
-  /**
-   * @brief Write a debug message to the log
-   * Note: This method will print a line break per default!
-   *
-   * e.g.
-   * @code{.cpp}
-   * #include <l4/liblog/log>
-   * log_debug("some debug %s", "message");
-   * @endcode
-   */
-#define log_debug(args...)                                                    \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::DEBUG, __FILE__,    \
-                             __FUNCTION__, __LINE__, args)
-
-  /**
-   * @brief Write an info message to the log
-   * Note: This method will print a line break per default!
-   *
-   * e.g.
-   * @code{.cpp}
-   * #include <l4/liblog/log>
-   * log_info("some info %s", "message");
-   * @endcode
-   */
-#define log_info(args...)                                                     \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::INFO, __FILE__,     \
-                             __FUNCTION__, __LINE__, args)
-
-  /**
-   * @brief Write a warn message to the log
-   * Note: This method will print a line break per default!
-   *
-   * e.g.
-   * @code{.cpp}
-   * #include <l4/liblog/log>
-   * log_warn("some warn %s", "message");
-   * @endcode
-   */
-#define log_warn(args...)                                                     \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::WARN, __FILE__,     \
-                             __FUNCTION__, __LINE__, args)
-
-  /**
-   * @brief Write an error message to the log
-   * Note: This method will print a line break per default!
-   *
-   * e.g.
-   * @code{.cpp}
-   * #include <l4/liblog/log>
-   * log_error("some error %s", "message");
-   * @endcode
-   */
-#define log_error(args...)                                                    \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::ERROR, __FILE__,    \
-                             __FUNCTION__, __LINE__, args)
-
-  /**
-   * @brief Write a fatal message to the log
-   * Note: This method will print a line break per default!
-   *
-   * e.g.
-   * @code{.cpp}
-   * #include <l4/liblog/log>
-   * log_fatal("some fatal %s", "message");
-   * @endcode
-   */
-#define log_fatal(args...)                                                    \
-  L4Re::LibLog::Log::printf (L4Re::LibLog::Log::MsgLevel::FATAL, __FILE__,    \
-                             __FUNCTION__, __LINE__, args)
-
-#else // ifdef NDEBUG
-
-#define log_debug(args...) (void)0
-#define log_info(args...) (void)0
-#define log_warn(args...) (void)0
-#define log_error(args...) (void)0
-#define log_fatal(args...) (void)0
-
-#endif
 
   /**
    * @brief The level of a specific Log message.
@@ -214,7 +116,7 @@ public:
    * The level should always have exactly one set bit.
    *
    * This enum will be used implicitly by the level-named
-   * functions e.g. log_error, log_debug, etc.
+   * functions e.g. error, debug, etc.
    *
    */
   // clang-format off
@@ -229,68 +131,201 @@ public:
   // clang-format on
 
   /**
+   * The print function is wrapped into a struct. This makes it possible to use
+   * default parameters together with variadic arguments on it. This works
+   * because the number and type of the variadic arguments are already known at
+   * the creation of the struct and not deduced by the actual function call.
+   *
+   * To specify the template parameter of the struct the C++17 feature -
+   * deduction guides and class template argument deduction (CTAD) - is used
+   *
+   * https://en.cppreference.com/w/cpp/language/class_template_argument_deduction
+   */
+
+  // ==================== DEBUG ====================
+  template <typename... Args> struct debug
+  {
+    /**
+     * @brief Write a debug message to the log
+     * @note This method will print a line break per default!
+     *
+     * @param args  A c-style format string and arguments
+     *
+     * e.g.
+     * @code{.cpp}
+     * #include <l4/liblog/log>
+     * L4Re::LibLog::Log::debug("some debug %s", "message");
+     * @endcode
+     */
+    explicit debug (Args... args, char const *const file = __builtin_FILE (),
+                    char const *const function = __builtin_FUNCTION (),
+                    const int line = __builtin_LINE ())
+    {
+      printf (MsgLevel::DEBUG, file, function, line, args...);
+    }
+  };
+
+  // User-defined deduction guide
+  template <typename... Args> explicit debug (Args... args) -> debug<Args...>;
+
+  // ==================== INFO  ====================
+  template <typename... Args> struct info
+  {
+    /**
+     * @brief Write an info message to the log
+     * @note This method will print a line break per default!
+     *
+     * @param args  A c-style format string and arguments
+     *
+     * e.g.
+     * @code{.cpp}
+     * #include <l4/liblog/log>
+     * L4Re::LibLog::Log::info("some info %s", "message");
+     * @endcode
+     */
+    explicit info (Args... args, char const *const file = __builtin_FILE (),
+                   char const *const function = __builtin_FUNCTION (),
+                   const int line = __builtin_LINE ())
+    {
+      printf (MsgLevel::INFO, file, function, line, args...);
+    }
+  };
+
+  // User-defined deduction guide
+  template <typename... Args> explicit info (Args... args) -> info<Args...>;
+
+  // ==================== WARN  ====================
+  template <typename... Args> struct warn
+  {
+    /**
+     * @brief Write a warn message to the log
+     * @note This method will print a line break per default!
+     *
+     * @param args  A c-style format string and arguments
+     *
+     * e.g.
+     * @code{.cpp}
+     * #include <l4/liblog/log>
+     * L4Re::LibLog::Log::warn("some warn %s", "message");
+     * @endcode
+     */
+    explicit warn (Args... args, char const *const file = __builtin_FILE (),
+                   char const *const function = __builtin_FUNCTION (),
+                   const int line = __builtin_LINE ())
+    {
+      printf (MsgLevel::WARN, file, function, line, args...);
+    }
+  };
+
+  // User-defined deduction guide
+  template <typename... Args> explicit warn (Args... args) -> warn<Args...>;
+
+  // ==================== ERROR ====================
+  template <typename... Args> struct error
+  {
+    /**
+     * @brief Write an error message to the log
+     * @note This method will print a line break per default!
+     *
+     * @param args  A c-style format string and arguments
+     *
+     * e.g.
+     * @code{.cpp}
+     * #include <l4/liblog/log>
+     * L4Re::LibLog::Log::error("some error %s", "message");
+     * @endcode
+     */
+    explicit error (Args... args, char const *const file = __builtin_FILE (),
+                    char const *const function = __builtin_FUNCTION (),
+                    const int line = __builtin_LINE ())
+    {
+      printf (MsgLevel::ERROR, file, function, line, args...);
+    }
+  };
+
+  // User-defined deduction guide
+  template <typename... Args> explicit error (Args... args) -> error<Args...>;
+
+  // ==================== FATAL ====================
+  template <typename... Args> struct fatal
+  {
+    /**
+     * @brief  Write a fatal message to the log
+     * @note   This method will print a line break per default!
+     *
+     * @param args  A c-style format string and arguments
+     *
+     * e.g.
+     * @code{.cpp}
+     * #include <l4/liblog/log>
+     * L4Re::LibLog::Log::fatal("some fatal %s", "message");
+     * @endcode
+     */
+    explicit fatal (Args... args, char const *const file = __builtin_FILE (),
+                    char const *const function = __builtin_FUNCTION (),
+                    const int line = __builtin_LINE ())
+    {
+      printf (MsgLevel::FATAL, file, function, line, args...);
+    }
+  };
+
+  // User-defined deduction guide
+  template <typename... Args> explicit fatal (Args... args) -> fatal<Args...>;
+
+  /**
    * @brief Generalized print method
    *
    * This method will do the actual printing.
    * Note: This method will print a line break per default!
    *
    * @param msg_lvl   The level of the message.
-   * @param file      The file of the caller. Generated with __FILE__
+   * @param file      The file of the caller. Generated with __builtin_FILE
    * @param function  The function name of the caller. Generated with
-   *                  __FUNCTION__
-   * @param line      The line index of the caller. Generated with __LINE__
+   *                  __builtin_FUNCTION
+   * @param line      The line index of the caller. Generated with
+   *                  __builtin_LINE
    * @param fmt       A format string.
    * @param args      The arguments for the format string.
-   *
-   * @return          The number of characters printed or a negative value if
-   * an output error occurred.
    *
    * Even if args is a variadic argument template the function it still needs
    * to be defined in a header file, just like normal templates.
    */
   template <typename... Args>
-  static int
+  inline static void
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
           const int line, char const *const fmt, Args... args)
   {
-    /* total char count TODO n is somehow 1 off for fputs?? */
-    int n = 0;
-
+#ifndef NDEBUG
     /* check if message should be silenced */
-    if (!(msg_lvl & _level.value))
-      return 0;
-
-    FILE *output = get_output (msg_lvl);
+    if (!(msg_lvl & getLevel ()))
+      return;
 
     /* output current time and date */
-    n += put_time (output);
-    fputc (' ', output);
-
+    char *time = time_str ();
     /* output the Level prefix */
-    n += put_severity (msg_lvl, output);
-    fputc (' ', output);
-
+    const char *severity = severity_str (msg_lvl);
     /* output the package name */
-    int ret = put_pkgname (output);
-    if (ret > 0)
-      {
-        n += ret;
-        fputc (' ', output);
-      }
+    const char *pkgname = pkgname_str ();
 
+    char *msg;
+    asprintf (&msg, fmt, args...);
     /* print file name */
-    n += fprintf (output, "\033[2m<%s:%d>\033[0m", rindex (file, '/') + 1,
-                  line);
-    fputc (' ', output);
+    char *string;
+    asprintf (&string, "%s %s %s \033[2m<%s:%d> %s:\033[0m %s\n", time,
+              severity, pkgname, rindex (file, '/') + 1, line, function, msg);
 
-    /* print function name */
-    n += fprintf (output, "\033[2m%s:\033[0m", function);
-    fputc (' ', output);
+    /**
+     * Call print only once with the whole string.
+     *
+     * This will at least try to print string with a single ipc call to prevent
+     * multiple concurrently running threads from interleaving their messages.
+     */
+    L4Re::Env::env ()->log ()->print (string);
 
-    /* output message */
-    n += fprintf (output, fmt, args...);
-    fputc ('\n', output);
-    return n;
+    free (string);
+    free (msg);
+    free (time);
+#endif
   }
 
   /**
@@ -307,17 +342,17 @@ public:
    *   }
    *  catch (L4::Base_exception &exc)
    *   {
-   *     log_fatal(exc);
+   *     L4Re::LibLog::Log::fatal {exc};
    *   }
    * @endcode
    *
    * All argument are just passed to the general Log::printf
    */
-  static int
+  inline static void
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
           const int line, L4::Base_exception &exception)
   {
-    return printf (msg_lvl, file, function, line, "%s", exception.str ());
+    printf (msg_lvl, file, function, line, "%s", exception.str ());
   }
 
   /**
@@ -335,25 +370,25 @@ public:
    *   }
    * catch (L4::Runtime_error &exc)
    *   {
-   *     log_fatal(exc);
+   *     L4Re::LibLog::Log::fatal {exc};
    *   }
    * @endcode
    */
-  static int
+  inline static void
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
           const int line, L4::Runtime_error &exception)
   {
-    return printf (msg_lvl, file, function, line, "%s: %s", exception.str (),
-                   exception.extra_str ());
+    printf (msg_lvl, file, function, line, "%s: %s", exception.str (),
+            exception.extra_str ());
   }
 
   /**
-   * @brief Helper method to log Loggable_errors
+   * @brief Helper method to log Loggable_exceptions
    *
-   * This method will be called for Loggable_errors.
+   * This method will be called for a Loggable_base_exception.
    * It will print the message of the error together with the location where
-   * the error was thrown. (For all other error types only the location of the
-   * printing statement will be logged)
+   * the error was thrown. (For all other error types only the location of
+   * the printing statement will be logged)
    *
    * Example:
    * @code{.cpp}
@@ -361,22 +396,22 @@ public:
    *   {
    *    // anything ...
    *   }
-   * catch (L4Re::LibLog::Loggable_error &exc)
+   * catch (L4Re::LibLog::Loggable_base_exception &exc)
    *   {
-   *     log_fatal(exc);
+   *     L4Re::LibLog::Log::fatal {exc};
    *   }
    * @endcode
    */
-  static int
+  inline static void
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, Loggable_error &exc)
+          const int line, Loggable_base_exception &exc)
   {
     /* location of print statement is discarded */
     (void)file;
     (void)function;
     (void)line;
-    return printf (msg_lvl, exc.file (), exc.function (), exc.line (),
-                   "%s: %s", exc.str (), exc.msg ());
+    printf (msg_lvl, exc.file (), exc.function (), exc.line (), "%s: %s",
+            exc.str (), exc.msg ());
   }
 
 private:
@@ -392,7 +427,21 @@ private:
    * @return The number of characters printed or a negative value if an output
    * error occurred.
    */
-  static int put_severity (MsgLevel msg_lvl, FILE *output);
+  static const char *
+  severity_str (MsgLevel msg_lvl)
+  {
+    // clang-format off
+    switch (msg_lvl)
+      {
+      case MsgLevel::DEBUG: return "\033[34;1mDEBUG\033[0m";
+      case MsgLevel::INFO:  return "\033[36;1mINFO \033[0m";
+      case MsgLevel::WARN:  return "\033[33;1mWARN \033[0m";
+      case MsgLevel::ERROR: return "\033[31;1mERROR\033[0m";
+      case MsgLevel::FATAL: return "\033[35;1mFATAL\033[0m";
+      }
+    // clang-format on
+    return nullptr;
+  }
 
   /**
    * @brief Print a prefix showing the time of the message
@@ -404,7 +453,20 @@ private:
    * @return The number of characters printed or a negative value if an output
    * error occurred.
    */
-  static int put_time (FILE *output);
+  static char *
+  time_str ()
+  {
+
+    struct timespec ts;
+    if (clock_gettime (CLOCK_REALTIME, &ts))
+      return nullptr;
+
+    // print sec : usec per default
+    char *str;
+    if (asprintf (&str, "%02ld:%03ld", ts.tv_sec, ts.tv_nsec / 1000000) == -1)
+      return nullptr;
+    return str;
+  }
 
   /**
    * @brief Print a prefix with the name of the package
@@ -416,33 +478,10 @@ private:
    * error occurred.
    * @return -L4_ENOENT if PKGNAME was not set
    */
-  static int put_pkgname (FILE *output);
-
-private:
-  /**
-   * @brief The current log output level.
-   *
-   * This will select which messages are silenced and
-   * which are written to the output.
-   *
-   * \see #setLevel #getLevel
-   */
-  static Level _level;
-
-  /**
-   * @brief Get the output 'FILE *'-object
-   *
-   * @param msg_lvl  The level that will be printed
-   * @return stdout  if level is INFO or DEBUG
-   * @return stderr  if level if WARN or higher
-   */
-  static FILE *
-  get_output (MsgLevel msg_lvl)
+  static char *
+  pkgname_str ()
   {
-    if (msg_lvl & Level::WARN)
-      return stderr;
-    else
-      return stdout;
+    return getenv ("PKGNAME");
   }
 };
 
