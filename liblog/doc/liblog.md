@@ -115,6 +115,7 @@ the loggable error is, that it can be constructed with a format string.
 
 ```cpp
 #include <l4/liblog/log>
+#include <l4/fmt/core.h>
 #include <l4/liblog/loggable-exception>
 
 using L4Re::LibLog::Loggable_exception;
@@ -124,11 +125,19 @@ try
   {
     int bad_value = -1;
     if (bad_value < 0)
-      throw Loggable_exception (-L4_EINVAL, "Value shouldn't be less than 0 (value=%d)", bad_value);
+      throw Loggable_exception (-L4_EINVAL, fmt::format("Value shouldn't be less than 0 (value={:d})", bad_value));
   }
-catch (L4Re::LibLog::Loggable_base_exception &e)
+catch (Loggable_exception &e)
   {
-    Log::fatal{ e };
+    Log::fatal (fmt::format("{}", e));
     return e.err_no ();
   }
 ```
+
+## TODO
+
+add chksys
+add chkcap
+add chkipc
+
+with error lambda/function formatted output and Loggable_exception

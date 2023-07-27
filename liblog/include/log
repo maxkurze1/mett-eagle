@@ -20,12 +20,24 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <chrono>
+
+#include <l4/fmt/core.h>
+#include <l4/fmt/std.h> // formatting of std::thread::id
+#include <l4/fmt/chrono.h> // formatting of std::chrono
 
 #include <l4/cxx/exceptions>
 #include <l4/liblog/loggable-exception>
 #include <l4/re/env>
+#include <l4/re/error_helper>
+#include <l4/sys/err.h>
+#include <l4/sys/semaphore>
 
 namespace L4Re
 {
@@ -131,146 +143,101 @@ public:
   // clang-format on
 
   /**
-   * The print function is wrapped into a struct. This makes it possible to use
-   * default parameters together with variadic arguments on it. This works
-   * because the number and type of the variadic arguments are already known at
-   * the creation of the struct and not deduced by the actual function call.
+   * @brief Write a debug message to the log
+   * @note This method will print a line break per default!
    *
-   * To specify the template parameter of the struct the C++17 feature -
-   * deduction guides and class template argument deduction (CTAD) - is used
+   * @param args  A c-style format string and arguments
    *
-   * https://en.cppreference.com/w/cpp/language/class_template_argument_deduction
+   * e.g.
+   * @code{.cpp}
+   * #include <l4/liblog/log>
+   * L4Re::LibLog::Log::debug("some debug %s", "message");
+   * @endcode
    */
-
-  // ==================== DEBUG ====================
-  template <typename... Args> struct debug
+  inline static void
+  debug (std::string msg, char const *const file = __builtin_FILE (),
+         char const *const function = __builtin_FUNCTION (),
+         const int line = __builtin_LINE ())
   {
-    /**
-     * @brief Write a debug message to the log
-     * @note This method will print a line break per default!
-     *
-     * @param args  A c-style format string and arguments
-     *
-     * e.g.
-     * @code{.cpp}
-     * #include <l4/liblog/log>
-     * L4Re::LibLog::Log::debug("some debug %s", "message");
-     * @endcode
-     */
-    explicit debug (Args... args, char const *const file = __builtin_FILE (),
-                    char const *const function = __builtin_FUNCTION (),
-                    const int line = __builtin_LINE ())
-    {
-      printf (MsgLevel::DEBUG, file, function, line, args...);
-    }
-  };
+    printf (MsgLevel::DEBUG, file, function, line, msg);
+  }
 
-  // User-defined deduction guide
-  template <typename... Args> explicit debug (Args... args) -> debug<Args...>;
-
-  // ==================== INFO  ====================
-  template <typename... Args> struct info
+  /**
+   * @brief Write an info message to the log
+   * @note This method will print a line break per default!
+   *
+   * @param args  A c-style format string and arguments
+   *
+   * e.g.
+   * @code{.cpp}
+   * #include <l4/liblog/log>
+   * L4Re::LibLog::Log::info("some info %s", "message");
+   * @endcode
+   */
+  inline static void
+  info (std::string msg, char const *const file = __builtin_FILE (),
+        char const *const function = __builtin_FUNCTION (),
+        const int line = __builtin_LINE ())
   {
-    /**
-     * @brief Write an info message to the log
-     * @note This method will print a line break per default!
-     *
-     * @param args  A c-style format string and arguments
-     *
-     * e.g.
-     * @code{.cpp}
-     * #include <l4/liblog/log>
-     * L4Re::LibLog::Log::info("some info %s", "message");
-     * @endcode
-     */
-    explicit info (Args... args, char const *const file = __builtin_FILE (),
-                   char const *const function = __builtin_FUNCTION (),
-                   const int line = __builtin_LINE ())
-    {
-      printf (MsgLevel::INFO, file, function, line, args...);
-    }
-  };
-
-  // User-defined deduction guide
-  template <typename... Args> explicit info (Args... args) -> info<Args...>;
-
-  // ==================== WARN  ====================
-  template <typename... Args> struct warn
+    printf (MsgLevel::INFO, file, function, line, msg);
+  }
+  /**
+   * @brief Write a warn message to the log
+   * @note This method will print a line break per default!
+   *
+   * @param args  A c-style format string and arguments
+   *
+   * e.g.
+   * @code{.cpp}
+   * #include <l4/liblog/log>
+   * L4Re::LibLog::Log::warn("some warn %s", "message");
+   * @endcode
+   */
+  inline static void
+  warn (std::string msg, char const *const file = __builtin_FILE (),
+        char const *const function = __builtin_FUNCTION (),
+        const int line = __builtin_LINE ())
   {
-    /**
-     * @brief Write a warn message to the log
-     * @note This method will print a line break per default!
-     *
-     * @param args  A c-style format string and arguments
-     *
-     * e.g.
-     * @code{.cpp}
-     * #include <l4/liblog/log>
-     * L4Re::LibLog::Log::warn("some warn %s", "message");
-     * @endcode
-     */
-    explicit warn (Args... args, char const *const file = __builtin_FILE (),
-                   char const *const function = __builtin_FUNCTION (),
-                   const int line = __builtin_LINE ())
-    {
-      printf (MsgLevel::WARN, file, function, line, args...);
-    }
-  };
-
-  // User-defined deduction guide
-  template <typename... Args> explicit warn (Args... args) -> warn<Args...>;
-
-  // ==================== ERROR ====================
-  template <typename... Args> struct error
+    printf (MsgLevel::WARN, file, function, line, msg);
+  }
+  /**
+   * @brief Write an error message to the log
+   * @note This method will print a line break per default!
+   *
+   * @param args  A c-style format string and arguments
+   *
+   * e.g.
+   * @code{.cpp}
+   * #include <l4/liblog/log>
+   * L4Re::LibLog::Log::error("some error %s", "message");
+   * @endcode
+   */
+  inline static void
+  error (std::string msg, char const *const file = __builtin_FILE (),
+         char const *const function = __builtin_FUNCTION (),
+         const int line = __builtin_LINE ())
   {
-    /**
-     * @brief Write an error message to the log
-     * @note This method will print a line break per default!
-     *
-     * @param args  A c-style format string and arguments
-     *
-     * e.g.
-     * @code{.cpp}
-     * #include <l4/liblog/log>
-     * L4Re::LibLog::Log::error("some error %s", "message");
-     * @endcode
-     */
-    explicit error (Args... args, char const *const file = __builtin_FILE (),
-                    char const *const function = __builtin_FUNCTION (),
-                    const int line = __builtin_LINE ())
-    {
-      printf (MsgLevel::ERROR, file, function, line, args...);
-    }
-  };
-
-  // User-defined deduction guide
-  template <typename... Args> explicit error (Args... args) -> error<Args...>;
-
-  // ==================== FATAL ====================
-  template <typename... Args> struct fatal
+    printf (MsgLevel::ERROR, file, function, line, msg);
+  }
+  /**
+   * @brief  Write a fatal message to the log
+   * @note   This method will print a line break per default!
+   *
+   * @param args  A c-style format string and arguments
+   *
+   * e.g.
+   * @code{.cpp}
+   * #include <l4/liblog/log>
+   * L4Re::LibLog::Log::fatal("some fatal %s", "message");
+   * @endcode
+   */
+  inline static void
+  fatal (std::string msg, char const *const file = __builtin_FILE (),
+         char const *const function = __builtin_FUNCTION (),
+         const int line = __builtin_LINE ())
   {
-    /**
-     * @brief  Write a fatal message to the log
-     * @note   This method will print a line break per default!
-     *
-     * @param args  A c-style format string and arguments
-     *
-     * e.g.
-     * @code{.cpp}
-     * #include <l4/liblog/log>
-     * L4Re::LibLog::Log::fatal("some fatal %s", "message");
-     * @endcode
-     */
-    explicit fatal (Args... args, char const *const file = __builtin_FILE (),
-                    char const *const function = __builtin_FUNCTION (),
-                    const int line = __builtin_LINE ())
-    {
-      printf (MsgLevel::FATAL, file, function, line, args...);
-    }
-  };
-
-  // User-defined deduction guide
-  template <typename... Args> explicit fatal (Args... args) -> fatal<Args...>;
+    printf (MsgLevel::FATAL, file, function, line, msg);
+  }
 
   /**
    * @brief Generalized print method
@@ -293,26 +260,37 @@ public:
   template <typename... Args>
   inline static void
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, char const *const fmt, Args... args)
+          const int line, std::string msg)
   {
 #ifndef NDEBUG
     /* check if message should be silenced */
     if (!(msg_lvl & getLevel ()))
       return;
 
-    /* output current time and date */
-    char *time = time_str ();
     /* output the Level prefix */
     const char *severity = severity_str (msg_lvl);
-    /* output the package name */
-    const char *pkgname = pkgname_str ();
 
-    char *msg;
-    asprintf (&msg, fmt, args...);
-    /* print file name */
-    char *string;
-    asprintf (&string, "%s %s %s \033[2m<%s:%d> %s:\033[0m %s\n", time,
-              severity, pkgname, rindex (file, '/') + 1, line, function, msg);
+    // std::stringstream thread_id_string;
+    // // 10 width = 2 for '0x' prefix 8 for the 8 hexadecimal digits
+    // // this assumes 64bit thread ids
+    // thread_id_string << std::setw (10) << std::this_thread::get_id ();
+
+    auto now = std::chrono::high_resolution_clock::now();
+    // auto [ss, ms, us] = break_down_durations<std::chrono::seconds, std::chrono::milliseconds, std::chrono::microseconds>( now.time_since_epoch() );
+
+    using namespace fmt::literals; // necessary for the ""_a literals for named
+                                   // format args
+    auto t_id = std::this_thread::get_id();
+    std::string out_string = fmt::format (
+        "\033[2m{thread_id:>10} {time:%T}\033[0m {severity:s} {pkgname:s} \033[2m<{file:s}:{line:d}> {function:s}\033[0m {msg:s}\n",
+        "thread_id"_a = t_id,
+        "time"_a = now,
+        "severity"_a = severity,
+        "pkgname"_a = getenv ("PKGNAME") ?: "",
+        "file"_a = file + std::string (file).find_last_of('/') + 1,
+        "line"_a = line,
+        "function"_a = function,
+        "msg"_a = msg);
 
     /**
      * Call print only once with the whole string.
@@ -320,14 +298,21 @@ public:
      * This will at least try to print string with a single ipc call to prevent
      * multiple concurrently running threads from interleaving their messages.
      */
-    L4Re::Env::env ()->log ()->print (string);
+    auto sema = Env::env ()->get_cap<L4::Semaphore> ("log_sync");
 
-    free (string);
-    free (msg);
-    free (time);
+    l4_umword_t store = l4_utcb_mr ()->mr[0]; // sema->down will change the first mr
+    if (sema.is_valid ())
+      sema->down ();
+
+    L4Re::Env::env ()->log ()->print (out_string.c_str ());
+
+    if (sema.is_valid ())
+      sema->up ();
+    l4_utcb_mr ()->mr[0] = store;
 #endif
   }
 
+#ifdef __EXCEPTIONS
   /**
    * @brief Helper method to log Exceptions
    *
@@ -352,7 +337,8 @@ public:
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
           const int line, L4::Base_exception &exception)
   {
-    printf (msg_lvl, file, function, line, "%s", exception.str ());
+    printf (msg_lvl, file, function, line,
+            fmt::format ("{:s}", exception.str ()));
   }
 
   /**
@@ -378,8 +364,9 @@ public:
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
           const int line, L4::Runtime_error &exception)
   {
-    printf (msg_lvl, file, function, line, "%s: %s", exception.str (),
-            exception.extra_str ());
+    printf (
+        msg_lvl, file, function, line,
+        fmt::format ("{:s}: {:s}", exception.str (), exception.extra_str ()));
   }
 
   /**
@@ -404,15 +391,16 @@ public:
    */
   inline static void
   printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, Loggable_base_exception &exc)
+          const int line, Loggable_exception &exc)
   {
     /* location of print statement is discarded */
     (void)file;
     (void)function;
     (void)line;
-    printf (msg_lvl, exc.file (), exc.function (), exc.line (), "%s: %s",
-            exc.str (), exc.msg ());
+    printf (msg_lvl, exc.file (), exc.function (), exc.line (),
+            fmt::format ("{:s}: {:s}", exc.str (), exc.msg ()));
   }
+#endif // ifdef __EXCEPTIONS
 
 private:
   /**
@@ -433,55 +421,14 @@ private:
     // clang-format off
     switch (msg_lvl)
       {
-      case MsgLevel::DEBUG: return "\033[34;1mDEBUG\033[0m";
-      case MsgLevel::INFO:  return "\033[36;1mINFO \033[0m";
-      case MsgLevel::WARN:  return "\033[33;1mWARN \033[0m";
-      case MsgLevel::ERROR: return "\033[31;1mERROR\033[0m";
-      case MsgLevel::FATAL: return "\033[35;1mFATAL\033[0m";
+      case MsgLevel::DEBUG: return "\033[34;1mDEBUG\033[0m"; // blue
+      case MsgLevel::INFO:  return "\033[36;1mINFO \033[0m"; // green
+      case MsgLevel::WARN:  return "\033[33;1mWARN \033[0m"; // yellow
+      case MsgLevel::ERROR: return "\033[31;1mERROR\033[0m"; // red
+      case MsgLevel::FATAL: return "\033[35;1mFATAL\033[0m"; // purple
       }
     // clang-format on
     return nullptr;
-  }
-
-  /**
-   * @brief Print a prefix showing the time of the message
-   *
-   * Print the current timestamp into the log
-   *
-   * @param output The FILE* to write to
-   *
-   * @return The number of characters printed or a negative value if an output
-   * error occurred.
-   */
-  static char *
-  time_str ()
-  {
-
-    struct timespec ts;
-    if (clock_gettime (CLOCK_REALTIME, &ts))
-      return nullptr;
-
-    // print sec : usec per default
-    char *str;
-    if (asprintf (&str, "%02ld:%03ld", ts.tv_sec, ts.tv_nsec / 1000000) == -1)
-      return nullptr;
-    return str;
-  }
-
-  /**
-   * @brief Print a prefix with the name of the package
-   *
-   * The name of the package will be loaded from the PKGNAME
-   * environment variable.
-   *
-   * @return The number of characters printed or a negative value if an output
-   * error occurred.
-   * @return -L4_ENOENT if PKGNAME was not set
-   */
-  static char *
-  pkgname_str ()
-  {
-    return getenv ("PKGNAME");
   }
 };
 

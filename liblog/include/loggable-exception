@@ -20,87 +20,15 @@
 #include <cstdio>
 #include <cstdlib>
 #include <l4/cxx/exceptions>
-#include <tuple>
+#include <string>
+
+#include <l4/fmt/core.h>
 
 namespace L4Re
 {
 
 namespace LibLog
 {
-
-/**
- * @brief A base class to for catching all templates of Loggable_exception
- *
- * This class can be used to catch all possible template implementations of the
- * Loggable_exception class.
- */
-class Loggable_base_exception : public L4::Base_exception
-{
-protected:
-  char *_msg = NULL;
-  const long _errno;
-  const char *_file = NULL;
-  const char *_function = NULL;
-  const int _line = -1;
-
-  Loggable_base_exception (long err_no, const char *file, const char *func,
-                           int line)
-      : _errno (err_no), _file (file), _function (func), _line (line)
-  {
-  }
-
-public:
-  inline char const *
-  str () const noexcept override
-  {
-    return l4sys_errtostr (_errno);
-  }
-
-  /**
-   * @brief Get the message of this runtime error.
-   */
-  inline char const *
-  msg () const noexcept
-  {
-    return _msg;
-  }
-
-  /**
-   * @brief Get the error value for this runtime error.
-   */
-  inline long
-  err_no () const noexcept
-  {
-    return _errno;
-  }
-
-  /**
-   * @brief The name of the file that threw the error
-   */
-  inline char const *
-  file () const noexcept
-  {
-    return _file;
-  }
-
-  /**
-   * @brief The name of the function that threw the error
-   */
-  inline char const *
-  function () const noexcept
-  {
-    return _function;
-  }
-
-  /**
-   * @brief The line of the file that threw the error
-   */
-  inline int
-  line () const noexcept
-  {
-    return _line;
-  }
-};
 
 /**
  * @brief An exception class with special logging functionalities
@@ -136,43 +64,143 @@ public:
  * }
  * @endcode
  */
-template <typename... Args>
-class Loggable_exception : public Loggable_base_exception
+class Loggable_exception : public L4::Base_exception
 {
+protected:
+  std::string _msg;
+  const long _errno;
+  const char *_file = NULL;
+  const char *_func = NULL;
+  const int _line = -1;
 
 public:
   /**
    * Create a loggable exception from a format string.
    */
   explicit inline Loggable_exception (
-      long err_no, char const *const fmt = NULL, Args... args,
+      long err_no, std::string msg = {},
       char const *const file = __builtin_FILE (),
       char const *const func = __builtin_FUNCTION (),
-      const int line = __builtin_LINE ()) noexcept
-      : Loggable_base_exception (err_no, file, func, line)
+      const int line = __builtin_LINE ()) noexcept : _msg (msg),
+                                                     _errno (err_no),
+                                                     _file (file),
+                                                     _func (func),
+                                                     _line (line)
   {
-    if (fmt == NULL)
-      return;
-    asprintf (&_msg, fmt, args...);
   }
+  inline char const *
+  str () const noexcept override
+  {
+    return l4sys_errtostr (_errno);
+  }
+
   /**
-   * Destructor has to free the message of the exception
+   * @brief Get the message of this runtime error.
    */
-  ~Loggable_exception () noexcept { free (_msg); }
+  inline char const *
+  msg () const noexcept
+  {
+    return _msg.c_str ();
+  }
+
+  /**
+   * @brief Get the error value for this runtime error.
+   */
+  inline long
+  err_no () const noexcept
+  {
+    return _errno;
+  }
+
+  /**
+   * @brief The name of the file that threw the error
+   */
+  inline char const *
+  file () const noexcept
+  {
+    return _file;
+  }
+
+  /**
+   * @brief The name of the function that threw the error
+   */
+  inline char const *
+  function () const noexcept
+  {
+    return _func;
+  }
+
+  /**
+   * @brief The line of the file that threw the error
+   */
+  inline int
+  line () const noexcept
+  {
+    return _line;
+  }
+};
+
+} // ns LibLog
+
+} // ns L4Re
+
+/**
+ * @brief Custom formatter for Loggable_exceptions
+ * 
+ * \see https://fmt.dev/latest/api.html#formatting-user-defined-types
+ */
+template <> struct fmt::formatter<L4Re::LibLog::Loggable_exception>
+{
+  constexpr auto
+  parse (format_parse_context &ctx) -> format_parse_context::iterator
+  {
+    return ctx.end ();
+  }
+  auto
+  format (const L4Re::LibLog::Loggable_exception &exc,
+          format_context &ctx) const -> format_context::iterator
+  {
+    return fmt::format_to (ctx.out (), "{:s}: {:s}", exc.str (), exc.msg ());
+  }
 };
 
 /**
- * User-defined deduction guide
- * https://en.cppreference.com/w/cpp/language/class_template_argument_deduction
- *
- * This will cause the Args template to match all the passed parameter classes.
- * Thus the constructor will also expect them as 'args'and use the default
- * values for the filename, function name and line number.
+ * @brief Custom formatter for L4::Base_exception
+ * 
+ * \see https://fmt.dev/latest/api.html#formatting-user-defined-types
  */
-template <typename... Args>
-explicit Loggable_exception (long err_no, const char *fmt, Args... args)
-    -> Loggable_exception<Args...>;
+template <> struct fmt::formatter<L4::Base_exception>
+{
+  constexpr auto
+  parse (format_parse_context &ctx) -> format_parse_context::iterator
+  {
+    return ctx.end ();
+  }
+  auto
+  format (const L4::Base_exception &exc, format_context &ctx) const
+      -> format_context::iterator
+  {
+    return fmt::format_to (ctx.out (), "{:s}", exc.str ());
+  }
+};
 
-}
-
-}
+/**
+ * @brief Custom formatter for L4::Runtime_error
+ * 
+ * \see https://fmt.dev/latest/api.html#formatting-user-defined-types
+ */
+template <> struct fmt::formatter<L4::Runtime_error>
+{
+  constexpr auto
+  parse (format_parse_context &ctx) -> format_parse_context::iterator
+  {
+    return ctx.end ();
+  }
+  auto
+  format (const L4::Runtime_error &exc, format_context &ctx) const
+      -> format_context::iterator
+  {
+    return fmt::format_to (ctx.out (), "{:s}: {:s}", exc.str (),
+                           exc.extra_str ());
+  }
+};

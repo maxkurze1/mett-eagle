@@ -1,3 +1,2 @@
-requires: stdlibs
-provides: liblog
+requires: libstdc++
 maintainer: Max.Kurze@mailbox.tu-dresden.de

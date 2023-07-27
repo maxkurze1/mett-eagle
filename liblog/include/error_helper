@@ -1,0 +1,187 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the COPYING-GPL-2 file for details.
+ */
+/**
+ * @file
+ * This file provides the same error helpers as <l4/re/error_helper>.
+ *
+ * @note These functions DO NOT return the given value. (This results from the
+ *       internal implementation as constructor)
+ *
+ * @headerfile {l4/liblog/error_helper}
+ */
+#pragma once
+
+#include <string>
+
+#include <l4/cxx/exceptions>
+#include <l4/cxx/type_traits>
+#include <l4/liblog/loggable-exception>
+#include <l4/sys/err.h>
+#include <l4/sys/types.h>
+
+namespace L4Re
+{
+
+namespace LibLog
+{
+
+#ifdef __EXCEPTIONS
+
+/**
+ * \brief Generate C++ exception on error
+ *
+ * \param err   Error value, if negative exception will be thrown
+ * \param ret   Optional value for exception, default is error value (err)
+ * \param extra Optional text for exception (default "")
+ *
+ * This function throws an exception if the err is negative.
+ *
+ * @note This function DOES NOT return err.
+ */
+template <typename Function = void (*) (long)>
+inline long
+chksys (
+    long err, std::string msg, long ret,
+    Function &&error_callback = [] (long) {},
+    char const *const file = __builtin_FILE (),
+    char const *const function = __builtin_FUNCTION (),
+    const int line = __builtin_LINE ())
+{
+  if (L4_UNLIKELY (err < 0))
+    {
+      error_callback (err);
+      throw Loggable_exception (ret ?: err, msg, file, function, line);
+    }
+  return err;
+}
+
+template <typename Function = void (*) (long)>
+inline long
+chksys (
+    long err, std::string msg = {}, Function &&error_callback = [] (long) {},
+    char const *const file = __builtin_FILE (),
+    char const *const function = __builtin_FUNCTION (),
+    const int line = __builtin_LINE ())
+{
+  return chksys (err, msg, 0, error_callback, file, function, line);
+}
+
+/**
+ * \brief Generate C++ exception on error
+ *
+ * \param t     Message tag.
+ * \param extra Optional text for exception (default "")
+ * \param utcb  Option UTCB
+ * \param ret   Optional value for exception, default is error value (err)
+ *
+ * This function throws an exception if the message tag contains an error or
+ * the label in the message tag is negative. Otherwise the label in the
+ * message tag is returned.
+ */
+template <typename Function = void (*) (l4_msgtag_t const &)>
+inline long
+chksys (
+    l4_msgtag_t const &tag, std::string msg, long ret,
+    Function &&error_callback = [] (l4_msgtag_t const &) {},
+    char const *const file = __builtin_FILE (),
+    char const *const function = __builtin_FUNCTION (),
+    const int line = __builtin_LINE ())
+{
+  if (L4_UNLIKELY (tag.has_error ()))
+    {
+      error_callback (tag);
+      throw Loggable_exception (ret ?: l4_error_u (tag, l4_utcb ()), msg, file,
+                                function, line);
+    }
+  else if (L4_UNLIKELY (tag.label () < 0))
+    {
+      error_callback (tag);
+      throw Loggable_exception (ret ?: tag.label (), msg, file, function,
+                                line);
+    }
+  return tag.label ();
+}
+
+// helper to omit the 'ret' value
+template <typename Function = void (*) (l4_msgtag_t const &)>
+inline long
+chksys (
+    l4_msgtag_t const &tag, std::string msg = {},
+    Function &&error_callback = [] (l4_msgtag_t const &) {},
+    char const *const file = __builtin_FILE (),
+    char const *const function = __builtin_FUNCTION (),
+    const int line = __builtin_LINE ())
+{
+  return chksys (tag, msg, 0, error_callback, file, function, line);
+}
+
+/**
+ * Check for valid capability or raise C++ exception
+ *
+ * \tparam T  Type of object to check, must be capability-like
+ *            (L4::Cap, L4Re::Util::Unique_cap etc.)
+ *
+ * \param cap    Capability value to check.
+ * \param extra  Optional text for exception.
+ * \param err    Error value for exception or 0 if the capability value
+ *               should be used.
+ *
+ * This function checks whether the capability is valid. If the capability
+ * is invalid an C++ exception is generated, using err if err is not zero,
+ * otherwise the capability value is used. A valid capability will just be
+ * returned.
+ */
+template <typename T, typename Function>
+inline T
+chkcap (
+    T &&cap, std::string msg, long err = -L4_ENOMEM,
+    Function &&error_callback = [] (T) {},
+    char const *const file = __builtin_FILE (),
+    char const *const function = __builtin_FUNCTION (),
+    const int line = __builtin_LINE ())
+{
+  if (L4_UNLIKELY (!cap.is_valid ()))
+    {
+      error_callback (cxx::forward<T> (cap));
+      throw Loggable_exception (err ? err : cap.cap (), msg, file, function,
+                                line);
+    }
+
+  return cxx::forward<T> (cap);
+}
+
+/**
+ * Test a message tag for IPC errors.
+ *
+ * \param tag    Message tag returned by the IPC.
+ * \param extra  Exception message in case of error.
+ * \param utcb   The UTCB used in the IPC operation.
+ *
+ * \returns  On IPC error an exception is thrown, otherwise `tag` is
+ * returned. \throws L4::Runtime_exception with the translated IPC error code
+ *
+ * This function does not check the message tag's label value.
+ *
+ * \note This must be called on a message tag before the UTCB is changed.
+ */
+inline l4_msgtag_t
+chkipc (l4_msgtag_t tag, char const *extra = "", l4_utcb_t *utcb = l4_utcb ())
+{
+  // if (L4_UNLIKELY (tag.has_error ()))
+  // chksys (l4_error_u (tag, utcb), extra);
+
+  return tag;
+}
+
+#endif // ifdef __EXCEPTIONS
+
+} // ns LibLog
+
+} // ns L4Re
