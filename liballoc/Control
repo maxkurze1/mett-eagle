@@ -1,0 +1,3 @@
+requires:
+provides: liballoc
+maintainer: Max.Kurze@mailbox.tu-dresden.de
