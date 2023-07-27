@@ -10,6 +10,7 @@ entry mett-eagle
     module function2
     module mett-eagle
     module mett-eagle-client
+    module output.txt :rw
 
 entry mett-eagle-python
     kernel fiasco -serial_esc
