@@ -19,6 +19,8 @@
 
 #include <l4/sys/utcb.h>
 
+#include <l4/fmt/core.h>
+
 using L4Re::LibLog::Log;
 using L4Re::LibLog::Loggable_exception;
 
@@ -32,7 +34,7 @@ try
     /* there has to be exactly one argument -- the string passed */
     if (L4_UNLIKELY (argc != 1))
       throw Loggable_exception (
-          -L4_EINVAL, "Wrong number of arguments. Expected 1 got %d", argc);
+          -L4_EINVAL, fmt::format("Wrong number of arguments. Expected 1 got {:d}", argc));
 
     /* actual call to the faas function */
     std::string ret{ Main (argv[0]) };
@@ -45,16 +47,16 @@ try
   }
 /**
  * These catch blocks will catch errors that are thrown by utility
- * methods like L4Re::chkcap or by the faas function
+ * methods like L4Re::chkcap or by the faas function itself
  */
-catch (L4Re::LibLog::Loggable_base_exception &e)
+catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal {e};
+    Log::fatal (fmt::format("{}",e));
     return e.err_no (); // propagate the error to the client
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal {e};
+    Log::fatal (fmt::format("{}",e));
     return e.err_no (); // propagate the error to the client
   }
 catch (... /* catch all */)
