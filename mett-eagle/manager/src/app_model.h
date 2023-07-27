@@ -52,6 +52,8 @@ struct App_model : public Ldr::Base_app_model<Stack>
   L4::Cap<L4Re::Rm> _rm;
 
   explicit App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
+                      L4::Cap<L4::Scheduler> const &scheduler
+                      = L4Re::Env::env ()->scheduler (),
                       L4::Cap<L4::Factory> const &alloc
                       = L4Re::Env::env ()->user_factory ());
 
@@ -134,25 +136,23 @@ struct App_model : public Ldr::Base_app_model<Stack>
                       L4::Cap<L4::Thread> *thread);
 
   l4_msgtag_t
-  run_thread (L4::Cap<L4::Thread> thread, l4_sched_param_t const &sp)
+  run_thread (L4::Cap<L4::Thread> thread, l4_sched_param_t const &)
   {
     L4::Cap<L4::Scheduler> scheduler (prog_info ()->scheduler.raw
                                       & (~0UL << L4_FPAGE_ADDR_SHIFT));
 
     // test whether intersection between provided cpu set and online cpu set
-    // is empty, in that case warn that the thread _may_ never run 
+    // is empty, in that case warn that the thread _may_ never run
     l4_umword_t cpu_max;
-    l4_sched_cpu_set_t cpus = sp.affinity;
+    l4_sched_cpu_set_t cpus = l4_sched_cpu_set (0, 0);
     l4_msgtag_t t = scheduler->info (&cpu_max, &cpus);
     if (l4_error (t))
       return t;
-      
-    Log::debug("cpu-max %ld", cpu_max);
-    Log::debug("cpu-map %ld", cpus.map);
-    Log::debug("sp.affinity.map %ld", sp.affinity.map);
 
-    if (!(cpus.map & sp.affinity.map))
-      Log::warn ("warning: Launching thread on offline CPU. Thread may never run!");
+    l4_sched_param_t sp = l4_sched_param(L4_SCHED_MIN_PRIO);
+    sp.affinity = cpus;
+
+    Log::debug(fmt::format("Scheduling on cpu {:x}", cpus.map));
 
     return scheduler->run_thread (thread, sp);
   }

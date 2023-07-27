@@ -20,6 +20,7 @@
 #include <l4/re/util/env_ns>
 #include <memory>
 #include <string>
+#include <l4/liballoc/alloc>
 
 namespace L4Re
 {
@@ -48,8 +49,9 @@ getManager (const char *const cap_name)
       "Couldn't get manager_registry capability");
   /* cap to receive new ipc gate from manager */
   auto manager_cap = L4Re::chkcap (
-      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
+      L4Re::Alloc::safe_cap_alloc.alloc<MettEagle::Manager_Client> (),
       "allocate manager capability");
+  L4Re::LibLog::Log::debug(fmt::format("manager cap idx {:#x}", manager_cap.cap()));
   /* register ipc call, see MettEagle::Manager_Registry */
   L4Re::chksys (manager_registry->register_client (manager_cap),
                 "register_client");

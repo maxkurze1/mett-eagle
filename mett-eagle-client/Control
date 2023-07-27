@@ -1,2 +1,2 @@
-requires: liblog libfaas
+requires: libfaas
 maintainer: Max.Kurze@mailbox.tu-dresden.de

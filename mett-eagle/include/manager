@@ -27,6 +27,8 @@
 #include <l4/sys/cxx/ipc_types>
 
 #include <l4/liblog/loggable-exception>
+#include <l4/liblog/log>
+#include <l4/fmt/core.h>
 
 #include <string>
 
@@ -169,8 +171,8 @@ struct Manager_Client
   {
     auto file = L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname);
     if (L4_UNLIKELY (not file.is_valid ()))
-      throw LibLog::Loggable_exception (-L4_EINVAL, "Couldn't find file '%s'",
-                                    std::make_tuple(pathname));
+      throw LibLog::Loggable_exception (-L4_EINVAL, fmt::format("Couldn't find file '{:s}'", pathname));
+    L4Re::LibLog::Log::debug(fmt::format("Dataspace cap idx {:#x}", file.cap()));
     return action_create_t::call (c (), name, file);
   }
 

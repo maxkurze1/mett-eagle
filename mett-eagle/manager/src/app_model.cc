@@ -11,6 +11,7 @@
 
 #include <l4/re/error_helper>
 #include <l4/re/util/env_ns>
+#include <l4/liballoc/alloc>
 
 using L4Re::chkcap;
 using L4Re::chksys;
@@ -27,7 +28,7 @@ using L4Re::chksys;
 App_model::Dataspace
 App_model::alloc_ds (unsigned long size) const
 {
-  Dataspace mem = chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (),
+  Dataspace mem = chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Dataspace> (),
                           "allocate capability");
   L4::Cap<L4Re::Mem_alloc> _ma (prog_info ()->mem_alloc.raw
                                 & L4_FPAGE_ADDR_MASK);
@@ -105,12 +106,13 @@ App_model::local_detach_ds (l4_addr_t addr, unsigned long /*size*/) const
 }
 
 App_model::App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
+                      L4::Cap<L4::Scheduler> const &scheduler,
                       L4::Cap<L4::Factory> const &alloc)
-    : _task (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4::Task> (),
+    : _task (L4Re::chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4::Task> (),
                            "allocating task cap")),
-      _thread (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4::Thread> (),
+      _thread (L4Re::chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4::Thread> (),
                              "allocating thread cap")),
-      _rm (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Rm> (),
+      _rm (L4Re::chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Rm> (),
                          "allocating region-map cap"))
 {
 
@@ -129,11 +131,11 @@ App_model::App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
   prog_info ()->rm        = _rm.fpage ();
   prog_info ()->parent    = parent.fpage ();
 
-  prog_info ()->mem_alloc = L4Re::Env::env ()->user_factory ().fpage ();
+  prog_info ()->mem_alloc = alloc.fpage ();
   prog_info ()->log       = L4Re::Env::env ()->log ().fpage ();
   prog_info ()->factory   = L4Re::Env::env ()->factory ().fpage ();
-  prog_info ()->scheduler = L4Re::Env::env ()->scheduler ().fpage ();
-  prog_info ()->ldr_flags = 0;
+  prog_info ()->scheduler = scheduler.fpage ();
+  prog_info ()->ldr_flags = 0; // TODO improve performance with COW??
   prog_info ()->l4re_dbg  = 0;
   // clang-format on
 }
@@ -146,7 +148,7 @@ App_model::alloc_app_stack ()
 {
   // create a new kernel-object for the Dataspace of the stack
   L4Re::Util::Ref_cap<L4Re::Dataspace>::Cap stack
-      = chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (),
+      = chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Dataspace> (),
                 "allocate stack capability");
   // get the memory allocator of the new process
   L4::Cap<L4Re::Mem_alloc> ma (prog_info ()->mem_alloc.raw
@@ -159,7 +161,7 @@ App_model::alloc_app_stack ()
   // new process and adjust the stack pointer
   _stack.set_stack (stack, _stack.stack_size ());
 
-  // release smart pointer stuff?
+  // release smart pointer stuff??
   return stack.release ();
 }
 

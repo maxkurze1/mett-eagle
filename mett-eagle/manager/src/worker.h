@@ -13,6 +13,7 @@
 #include <l4/re/util/cap_alloc>
 #include <list>
 #include <string>
+#include <utility>
 
 /**
  * App model that is really used in the end to start the worker process
@@ -33,8 +34,8 @@ private:
   {
     L4::Cap<void> capability;
     std::string name;
-    unsigned rights = 16;
-    unsigned flags = 16;
+    unsigned rights = 0;
+    unsigned flags = 0;
   };
 
   std::list<std::string> _argv;
@@ -49,9 +50,11 @@ private:
 public:
   explicit Worker (Const_dataspace bin,
                    L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
+                   L4::Cap<L4::Scheduler> const &scheduler
+                   = L4Re::Env::env ()->scheduler (),
                    L4::Cap<L4::Factory> const &alloc
                    = L4Re::Env::env ()->user_factory ())
-      : Remote_app_model (parent, alloc), _bin (bin)
+      : Remote_app_model (parent, scheduler, alloc), _bin (bin)
   {
   }
 
@@ -121,13 +124,8 @@ public:
     for (auto init_cap : _initial_capabilities)
       {
         auto name = init_cap.name.c_str ();
-        if (not l4re_env_cap_entry_t::is_valid_name (name))
-          {
-            Log::error ("Capability name '%s' too long", name);
-            continue;
-          }
         _stack.push (
-            l4re_env_cap_entry_t (name, get_initial_cap (name, &start)));
+            l4re_env_cap_entry_t (name, get_initial_cap (name, &start), init_cap.flags));
       }
     return start;
   }
@@ -143,9 +141,11 @@ public:
     for (auto init_cap : _initial_capabilities)
       {
         L4Re::chksys (task->map (
-            L4Re::This_task, init_cap.capability.fpage (init_cap.rights),
+            L4Re::This_task,
+            init_cap.capability.fpage (
+                L4_cap_fpage_rights (init_cap.rights & 0xf)),
             L4::Cap<void> (get_initial_cap (init_cap.name.c_str (), &start))
-                .snd_base () /* | external rights ???*/));
+                .snd_base ()));
       }
   }
 
@@ -284,14 +284,14 @@ public:
    */
   void
   add_initial_capability (L4::Cap<void> cap, std::string name,
-                          unsigned rights = 16, unsigned flags = 16)
+                          unsigned rights = 0, unsigned flags = 0)
   {
-    if (not l4re_env_cap_entry_t::is_valid_name (name.c_str ()))
+    if (not L4Re::Env::Cap_entry::is_valid_name (name.c_str ()))
       {
-        Log::error ("Capability name '%s' too long", name);
+        Log::error (fmt::format ("Capability name '{}' too long", name));
         return;
       }
-    _initial_capabilities.push_back ({ cap, name, rights, flags });
+    _initial_capabilities.push_back ({cap, name, rights, flags});
   }
 
   /**

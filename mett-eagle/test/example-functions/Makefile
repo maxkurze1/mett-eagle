@@ -1,7 +1,7 @@
-PKGDIR  ?= ..
-L4DIR   ?= $(PKGDIR)/../../..
+PKGDIR ?= ../..
+L4DIR  ?= $(PKGDIR)/../../..
 
-TARGET   = function2
+TARGET   = example-function
 SRC_CC   = $(patsubst $(SRC_DIR)/%,%,$(wildcard $(SRC_DIR)/*.cc))
 
 REQUIRES_LIBS = libfaas

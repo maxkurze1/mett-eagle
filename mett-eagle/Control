@@ -1,2 +1,2 @@
-requires: liblog libstdc++
+requires: libstdc++ libfmt libgtest liballoc
 maintainer: Max.Kurze@mailbox.tu-dresden.de

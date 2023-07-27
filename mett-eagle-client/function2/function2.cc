@@ -4,7 +4,7 @@
 using L4Re::LibLog::Log;
 
 std::string Main(std::string args) {
-  Log::info("Hello from function2, param: %s", args.c_str(),"filename");
+  Log::info(fmt::format("Hello from function2, param: '{}'", args));
 
   return "function2 long name";
 }
