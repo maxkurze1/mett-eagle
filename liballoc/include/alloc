@@ -5,7 +5,7 @@
  *
  * This file is distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 /**
  * @file
@@ -191,9 +191,9 @@ public:
       return false;
 
     l4_assert (_items[c].load () >= 0);
-
-    if (_items[c].fetch_sub (1)
-        == 1) // subtract 1 and check if old value was 1
+    
+    // subtract 1 and check if old value was 1
+    if (_items[c].fetch_sub (1) == 1) 
       {
         if (task != L4_INVALID_CAP)
           l4_task_unmap (task, cap.fpage (), unmap_flags);

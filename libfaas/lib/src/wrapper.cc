@@ -3,14 +3,12 @@
  *
  * This file is distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 
 #include <l4/libfaas/faas>
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
-
-#include <l4/mett-eagle/alias>
 
 #include <l4/re/env>
 #include <l4/re/error_helper>
