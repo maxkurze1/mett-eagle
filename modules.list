@@ -10,7 +10,6 @@ entry mett-eagle
     module function2
     module mett-eagle
     module mett-eagle-client
-    module output.txt :rw
 
 entry mett-eagle-python
     kernel fiasco -serial_esc
@@ -23,6 +22,24 @@ entry mett-eagle-python
     module ned
     module test.py
 
+    module libld-l4.so
+    module libc_be_sig.so
+    module libm_support.so
+    module lib4re-util.so
+    module libc_be_l4refile.so
+    module libsupc++.so
+    module libuc_c.so
+    module libpthread.so
+    module libc_be_l4re.so
+    module lib4re.so
+    module libl4util.so
+    module libl4sys.so
+    module libdl.so
+    module libc_support_misc.so
+    module libc_be_socket_noop.so
+
+    module python-faas
+    module libstdc++.so
     module libld-l4.so
     module libc_be_sig.so
     module libm_support.so

@@ -3,7 +3,7 @@
  *
  * This file is distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 #pragma once
 

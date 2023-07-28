@@ -3,7 +3,7 @@
  *
  * This file is distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 
 #include "app_model.h"
@@ -25,7 +25,6 @@
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
 #include <l4/liballoc/alloc>
-#include <l4/mett-eagle/alias>
 #include <l4/mett-eagle/manager>
 
 #include <l4/re/env>
@@ -42,6 +41,8 @@
 
 #include <thread-l4>
 
+
+namespace MettEagle = L4Re::MettEagle;
 using L4Re::LibLog::chksys;
 using L4Re::LibLog::Loggable_exception;
 
@@ -231,7 +232,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
         L4Re::Util::make_ref_del_cap<MettEagle::Manager_Worker> (),
         "Failed to alloc cap", -L4_ENOMEM);
     /* Pass the IPC gate cap to process as parent */
-    auto alloc = L4Re::Alloc::safe_cap_alloc.alloc<L4::Factory>();
+    auto alloc = L4Re::Util::cap_alloc.alloc<L4::Factory>();
     L4Re::chksys(l4_msgtag_t(L4Re::Env::env()->user_factory()->create(alloc) << l4_mword_t(1024 * 1024))); // TODO query from client 
     auto worker = std::make_shared<Worker> (file, cap, _scheduler, alloc);
     /* create the ipc handler for started process */
@@ -360,7 +361,7 @@ struct Manager_Registry_Epiface
               env->rm ()->free_area (kernel_user_mem);
             });
 
-    auto client_thread = L4Re::Alloc::safe_cap_alloc.alloc<L4::Thread> ();
+    auto client_thread = L4Re::Util::cap_alloc.alloc<L4::Thread> ();
     chksys (env->factory ()->create (client_thread), "create client thread");
 
     L4::Thread::Attr attr;
@@ -377,7 +378,7 @@ struct Manager_Registry_Epiface
     // });
 
     auto stack_cap = L4Re::chkcap (
-        L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Dataspace> (), "alloc cap");
+        L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (), "alloc cap");
 
     // alloc single page for the thread stack
     int stack_size = 4096;
@@ -406,7 +407,7 @@ struct Manager_Registry_Epiface
 
     // create scheduler for specific client
 
-    auto sched_cap = L4Re::Alloc::safe_cap_alloc.alloc<L4::Scheduler> ();
+    auto sched_cap = L4Re::Util::cap_alloc.alloc<L4::Scheduler> ();
 
     l4_umword_t limit = L4_SCHED_MAX_PRIO;
     l4_umword_t offset = L4_SCHED_MIN_PRIO;

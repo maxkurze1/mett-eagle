@@ -5,7 +5,7 @@
  *
  * This file is distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 /**
  * @file
@@ -49,7 +49,7 @@ getManager (const char *const cap_name)
       "Couldn't get manager_registry capability");
   /* cap to receive new ipc gate from manager */
   auto manager_cap = L4Re::chkcap (
-      L4Re::Alloc::safe_cap_alloc.alloc<MettEagle::Manager_Client> (),
+      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
       "allocate manager capability");
   L4Re::LibLog::Log::debug(fmt::format("manager cap idx {:#x}", manager_cap.cap()));
   /* register ipc call, see MettEagle::Manager_Registry */

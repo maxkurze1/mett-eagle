@@ -3,7 +3,7 @@
  *
  * This file is distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 #include <list>
 #include <memory>
@@ -11,7 +11,6 @@
 
 #include <l4/liblog/error_helper>
 #include <l4/liblog/log>
-#include <l4/mett-eagle/alias>
 #include <l4/mett-eagle/manager>
 #include <l4/mett-eagle/util>
 
@@ -22,7 +21,9 @@
 #include <iostream>
 #include <atomic>
 
+namespace MettEagle = L4Re::MettEagle;
 using L4Re::LibLog::Log;
+
 std::atomic<int> x {0};
 
 static void
@@ -81,8 +82,8 @@ try
 
 
     // sync clients
-    x ++;
-    while (x != 4) {std::this_thread::yield();};
+    // x ++;
+    // while (x != 4) {std::this_thread::yield();};
 
 
     Log::debug ("Register done");
@@ -113,10 +114,6 @@ try
     (void)_argc;
     (void)_argv;
     L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
-
-    Log::debug (fmt::format("test alloc {:#x}", L4Re::Alloc::safe_cap_alloc.alloc().cap()));
-    Log::debug (fmt::format("test alloc {:#x}", L4Re::Alloc::safe_cap_alloc.alloc().cap()));
-
 
     std::list<std::unique_ptr<std::thread> > thread_list;
 

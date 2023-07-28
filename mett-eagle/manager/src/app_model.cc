@@ -28,7 +28,7 @@ using L4Re::chksys;
 App_model::Dataspace
 App_model::alloc_ds (unsigned long size) const
 {
-  Dataspace mem = chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Dataspace> (),
+  Dataspace mem = chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (),
                           "allocate capability");
   L4::Cap<L4Re::Mem_alloc> _ma (prog_info ()->mem_alloc.raw
                                 & L4_FPAGE_ADDR_MASK);
@@ -108,11 +108,11 @@ App_model::local_detach_ds (l4_addr_t addr, unsigned long /*size*/) const
 App_model::App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
                       L4::Cap<L4::Scheduler> const &scheduler,
                       L4::Cap<L4::Factory> const &alloc)
-    : _task (L4Re::chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4::Task> (),
+    : _task (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4::Task> (),
                            "allocating task cap")),
-      _thread (L4Re::chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4::Thread> (),
+      _thread (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4::Thread> (),
                              "allocating thread cap")),
-      _rm (L4Re::chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Rm> (),
+      _rm (L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Rm> (),
                          "allocating region-map cap"))
 {
 
@@ -148,7 +148,7 @@ App_model::alloc_app_stack ()
 {
   // create a new kernel-object for the Dataspace of the stack
   L4Re::Util::Ref_cap<L4Re::Dataspace>::Cap stack
-      = chkcap (L4Re::Alloc::safe_cap_alloc.alloc<L4Re::Dataspace> (),
+      = chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (),
                 "allocate stack capability");
   // get the memory allocator of the new process
   L4::Cap<L4Re::Mem_alloc> ma (prog_info ()->mem_alloc.raw
