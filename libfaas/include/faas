@@ -48,14 +48,17 @@ getManager ()
  * @brief Invoke another faas function from a worker
  *
  * @param[in] name  The client-given name of the function
+ * @param[in] arg   The argument to the function
  *
  * @return  The returned string of the functions Main method
+ * 
+ * @throws  If the action_invoke ipc call fails
  */
 static inline std::string
-invoke (std::string name)
+invoke (std::string name, std::string arg)
 {
   std::string ret;
-  L4Re::chksys (getManager ()->action_invoke (name.c_str (), ret),
+  L4Re::chksys (getManager ()->action_invoke (name.c_str (), arg.c_str(), ret),
                 "faas invoke");
   return ret;
 }

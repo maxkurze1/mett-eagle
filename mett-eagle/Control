@@ -1,2 +1,2 @@
-requires: libstdc++ libfmt libgtest liballoc
+requires: libstdc++ libfmt libgtest
 maintainer: Max.Kurze@mailbox.tu-dresden.de

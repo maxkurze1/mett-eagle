@@ -129,7 +129,7 @@ try
   }
 catch (Loggable_exception &e)
   {
-    Log::fatal (fmt::format("{}", e));
+    Log::fatal ("{}", e);
     return e.err_no ();
   }
 ```

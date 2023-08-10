@@ -6,7 +6,7 @@
  * Please see the LICENSE.md file for details.
  */
 #define PY_SSIZE_T_CLEAN
-#include <l4/python/Python.h>
+#include <l4/python3/Python.h>
 
 #include <l4/libfaas/faas>
 #include <l4/liblog/log>
@@ -21,21 +21,37 @@
 
 #include <l4/fmt/core.h>
 
-
 using L4Re::LibLog::Log;
 using L4Re::LibLog::Loggable_exception;
 
 static void
 invoke_python_main ()
 {
-  PyObject *pName, *pModule, *pFunc;
+  PyObject *pModule, *pFunc;
   PyObject *pArgs, *pValue;
 
-  Py_Initialize ();
+  PyConfig config;
+
+  PyConfig_InitPythonConfig (&config);
+  config.use_hash_seed = 1;
+  config.hash_seed = 0;
+  config.platlibdir = (wchar_t *)L"/rom";
+  // config.site_import = 0;
+
+  Py_InitializeFromConfig (&config);
   // pName = PyString_FromString ("rom/test.py");
   /* Error checking of pName left out */
+  Log::debug ("Py_Init done");
+
   pModule = PyImport_AddModule ("__main__");
-  PyRun_SimpleString ("def test_function(str):\n  print \"hello world %s\" % (str)\n  return \"some answer\"");
+
+  Log::debug ("Added module");
+
+  PyRun_SimpleString ("def test_function(str):\n  return \"some answer\"");
+  PyRun_SimpleString ("import sys;"
+                      "print(\"hello world\", file=sys.stderr)");
+
+  Log::debug ("Ran string");
 
   if (pModule != NULL)
     {
@@ -45,14 +61,17 @@ invoke_python_main ()
       if (pFunc && PyCallable_Check (pFunc))
         {
           pArgs = PyTuple_New (1);
-          pValue = PyString_FromString ("argument string");
+          pValue = PyUnicode_FromString ("argument string");
           /* pValue reference stolen here: */
           PyTuple_SetItem (pArgs, 0, pValue);
           pValue = PyObject_CallObject (pFunc, pArgs);
           Py_DECREF (pArgs);
           if (pValue != NULL)
             {
-              printf ("Result of call: %s\n", PyString_AsString (pValue));
+              Py_ssize_t size;
+              auto string = PyUnicode_AsUTF8AndSize (pValue, &size);
+              printf ("Result of call: %.*s\n", (int)size, string);
+              Py_XDECREF (string);
               Py_DECREF (pValue);
             }
           else
@@ -68,8 +87,7 @@ invoke_python_main ()
         {
           if (PyErr_Occurred ())
             PyErr_Print ();
-          fprintf (stderr, "Cannot find function \"%s\"\n",
-                   "main_function_name");
+          fprintf (stderr, "Cannot find function\n");
         }
       Py_XDECREF (pFunc);
       Py_DECREF (pModule);
@@ -91,6 +109,7 @@ int
 main (int argc, const char *argv[])
 try
   {
+    (void)argv;
     /* there has to be exactly one argument -- the string passed */
     if (L4_UNLIKELY (argc != 1))
       throw Loggable_exception (
@@ -98,6 +117,7 @@ try
           fmt::format ("Wrong number of arguments. Expected 1 got {:d}",
                        argc));
 
+    Log::debug ("Trying to invoke python");
     /* actual call to the faas function */
     invoke_python_main ();
 
@@ -114,12 +134,12 @@ try
  */
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal (fmt::format ("{}", e));
+    Log::fatal ("{}", e);
     return e.err_no (); // propagate the error to the client
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal (fmt::format ("{}", e));
+    Log::fatal ("{}", e);
     return e.err_no (); // propagate the error to the client
   }
 catch (... /* catch all */)

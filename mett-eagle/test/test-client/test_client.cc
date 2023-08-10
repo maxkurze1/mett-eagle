@@ -18,7 +18,7 @@ TEST (MettEagle, SimpleInvoke)
   
   std::string answer;
   EXPECT_NO_THROW ([&]{
-    L4Re::chksys (manager->action_invoke ("test", answer));
+    L4Re::chksys (manager->action_invoke ("test", "some test argument", answer));
   });
 
   EXPECT_EQ(answer, std::string("example function answer"));

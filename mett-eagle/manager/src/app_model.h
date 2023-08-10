@@ -152,7 +152,7 @@ struct App_model : public Ldr::Base_app_model<Stack>
     l4_sched_param_t sp = l4_sched_param(L4_SCHED_MIN_PRIO);
     sp.affinity = cpus;
 
-    Log::debug(fmt::format("Scheduling on cpu {:x}", cpus.map));
+    Log::debug("Scheduling on cpu {:x}", cpus.map);
 
     return scheduler->run_thread (thread, sp);
   }

@@ -9,10 +9,10 @@
  */
 #pragma once
 
-#include <l4/cxx/exceptions>
+#include <l4/sys/cxx/ipc_server_loop>
+// #include <l4/cxx/exceptions>
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
-#include <l4/sys/cxx/ipc_server_loop>
 
 /**
  * @brief Error catching and logging dispatcher
@@ -39,17 +39,17 @@ struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
       }
     catch (L4Re::LibLog::Loggable_exception &e)
       {
-        L4Re::LibLog::Log::error (fmt::format("{}",e));
+        L4Re::LibLog::Log::error ("{}", e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Runtime_error &e)
       {
-        L4Re::LibLog::Log::error (fmt::format("{}",e));
+        L4Re::LibLog::Log::error ("{}", e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Base_exception &e)
       {
-        L4Re::LibLog::Log::error (fmt::format("{}",e));
+        L4Re::LibLog::Log::error ("{}", e);
         return l4_msgtag (-L4_EINVAL, 0, 0, 0);
       }
     catch (long err)

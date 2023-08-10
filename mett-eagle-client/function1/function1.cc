@@ -1,10 +1,10 @@
-#include <l4/liblog/log>
 #include <l4/libfaas/faas>
+#include <l4/liblog/log>
 
-#include <cstdlib>
 #include <cmath>
-#include <list>
+#include <cstdlib>
 #include <l4/re/env>
+#include <list>
 
 using L4Re::LibLog::Log;
 
@@ -12,11 +12,16 @@ constexpr unsigned long chunk_size = 8192UL;
 
 std::list<void *> mem;
 
-std::string Main(std::string args) {
-  Log::info(fmt::format("Hello from function1, param: {}", args));
+std::string
+Main (std::string args)
+{
+  auto start = std::chrono::high_resolution_clock::now ();
+
+  Log::info ("Hello from function1, param: {}", args);
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(500));
   // std::string ans = L4Re::Faas::invoke("test_idk");
-  
-  
+
   // int size = 0;
   // while (true) {
   //   void *some_mem = malloc(chunk_size);
@@ -25,5 +30,10 @@ std::string Main(std::string args) {
   //   size += chunk_size;
   //   Log::info(fmt::format("Malloced {}", size));
   // }
-  return "function1 idk "; // + ans;
+  auto end = std::chrono::high_resolution_clock::now ();
+
+  auto duration
+      = std::chrono::duration_cast<std::chrono::microseconds> (end - start);
+
+  return fmt::format("{}", duration.count()); // + ans;
 }

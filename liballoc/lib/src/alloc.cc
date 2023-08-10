@@ -15,7 +15,7 @@ namespace L4Re
 namespace Alloc
 {
 
-Safe_counting_cap_alloc<> safe_cap_alloc;
+// Safe_counting_cap_alloc<> safe_cap_alloc;
 
 }
 

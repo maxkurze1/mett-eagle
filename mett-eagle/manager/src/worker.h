@@ -288,7 +288,7 @@ public:
   {
     if (not L4Re::Env::Cap_entry::is_valid_name (name.c_str ()))
       {
-        Log::error (fmt::format ("Capability name '{}' too long", name));
+        Log::error ("Capability name '{}' too long", name);
         return;
       }
     _initial_capabilities.push_back ({cap, name, rights, flags});

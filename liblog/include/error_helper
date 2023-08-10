@@ -21,10 +21,9 @@
 #include <string>
 
 #include <l4/cxx/exceptions>
-#include <l4/cxx/type_traits>
 #include <l4/liblog/loggable-exception>
 #include <l4/sys/err.h>
-#include <l4/sys/types.h>
+#include <l4/cxx/type_traits> // cxx::forward
 
 namespace L4Re
 {
@@ -174,6 +173,8 @@ chkcap (
 inline l4_msgtag_t
 chkipc (l4_msgtag_t tag, char const *extra = "", l4_utcb_t *utcb = l4_utcb ())
 {
+  (void)extra;
+  (void)utcb;
   // if (L4_UNLIKELY (tag.has_error ()))
   // chksys (l4_error_u (tag, utcb), extra);
 

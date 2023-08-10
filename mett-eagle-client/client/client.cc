@@ -13,98 +13,201 @@
 #include <l4/liblog/log>
 #include <l4/mett-eagle/manager>
 #include <l4/mett-eagle/util>
+#include <l4/re/util/cap_alloc>
+#include <l4/re/util/unique_cap>
 
 #include <l4/re/error_helper>
 
+#include <l4/fmt/core.h>
+#include <l4/fmt/ranges.h>
+
+#include <atomic>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
-#include <atomic>
+#include <string>
+
+#include <time.h>
+
+#include <algorithm>
+#include <numeric>
 
 namespace MettEagle = L4Re::MettEagle;
 using L4Re::LibLog::Log;
 
-std::atomic<int> x {0};
+template <typename TYPE = l4_uint64_t, typename D_TYPE = double> struct Metric
+{
+  std::list<TYPE> samples;
+
+  void
+  addSample (TYPE val)
+  {
+    samples.push_back (val);
+  }
+
+  TYPE
+  sum ()
+  {
+    return std::accumulate (samples.begin (), samples.end (), TYPE (0));
+  }
+
+  TYPE
+  min ()
+  {
+    return *std::min_element (samples.begin (), samples.end ());
+  }
+
+  TYPE
+  max ()
+  {
+    return *std::max_element (samples.begin (), samples.end ());
+  }
+
+  D_TYPE
+  median ()
+  {
+    if (samples.size () == 0)
+      return D_TYPE (0);
+    samples.sort ();
+    if (samples.size () % 2 == 0)
+      { // no exact median
+        auto middle = samples.size () / 2;
+        return (samples[middle] + samples[middle - 1]) / D_TYPE (2);
+      }
+    else
+      return samples[(samples.size () - 1) / 2];
+  }
+
+  D_TYPE
+  avg () { return D_TYPE (sum ()) / D_TYPE (samples.size ()); }
+
+  std::size_t
+  cnt ()
+  {
+    return samples.size ();
+  }
+
+  std::string
+  toString ()
+  {
+    return fmt::format ("{{\"sum\"={},\"min\"={},\"max\"={},\"avg\"={},"
+                        "\"cnt\"={},\n\"samples\"={}}}",
+                        sum (), min (), max (), avg (), cnt (), samples);
+    // return fmt::format("{}", samples);
+  }
+};
+
+/**
+ * These metrics try to resemble the ones from owperf
+ * https://github.com/IBM/owperf
+ */
+struct Metrics
+{
+  Metric<> d;
+  Metric<> bi;
+  Metric<> ai;
+  Metric<> as;
+  Metric<> ae;
+  Metric<> ad;
+  Metric<> oea;
+  Metric<> oer;
+  Metric<> ora;
+  Metric<> rtt;
+  Metric<> ortt;
+
+  std::string
+  toString ()
+  {
+    return fmt::format ("{{\n"
+                        "\"d\" = {},\n"
+                        "\"bi\" = {},\n"
+                        "\"ai\" = {},\n"
+                        "\"as\" = {},\n"
+                        "\"ae\" = {},\n"
+                        "\"ad\" = {},\n"
+                        "\"oea\" = {},\n"
+                        "\"oer\" = {},\n"
+                        "\"ora\" = {},\n"
+                        "\"rtt\" = {},\n"
+                        "\"ortt\" = {}\n"
+                        "}}",
+                        d.toString (), bi.toString (), ai.toString (),
+                        as.toString (), ae.toString (), ad.toString (),
+                        oea.toString (), oer.toString (), ora.toString (),
+                        rtt.toString (), ortt.toString ());
+  }
+} metrics;
 
 static void
-client (const char *action_name, int num)
+benchmark (const char *action_name, int iterations)
 try
   {
-    // sync clients
-    x ++;
-    while (x != 2) {std::this_thread::yield();};
 
-
-
-    // auto file
-    //     = L4Re::Util::Env_ns{}.query<L4Re::Dataspace> ("rwfs/output.txt");
-    // if (!file.is_valid ())
-    //   throw L4Re::LibLog::Loggable_exception (-L4_EINVAL, "Failed to query");
-    // // TODO add chkcap everywhere
-    // auto data = L4Re::chkcap (L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (), "no cap");
-    // L4Re::chksys(L4Re::Env::env()->mem_alloc()->alloc(4096,data), "malloc");
-    // l4_addr_t _addr;
-    // L4Re::chksys(L4Re::Env::env()->rm()->attach(&_addr, data->size(), L4Re::Rm::F::RW | L4Re::Rm::F::Search_addr, L4::Ipc::make_cap_rw(data)), "attach");
-    // const char *msg = "Some text";
-    // memcpy((void *)_addr, msg, strlen(msg) + 1);
-    // L4Re::chksys(file->copy_in (0, data, 0, strlen(msg) + 1), "copy in");
-
-    // l4_addr_t _addr_file;
-    // L4Re::chksys(L4Re::Env::env()->rm()->attach(&_addr_file, file->size(), L4Re::Rm::F::RW | L4Re::Rm::F::Search_addr, L4::Ipc::make_cap_rw(file)), "file attach");
-    
-    // Log::debug(fmt::format("file content = {:s}", (char *)_addr_file));
-
-
-    // FILE *fptr;
-    // // Open a file in writing mode
-    // fptr = fopen ("rwfs/output.txt", "r+");
-    // if (fptr == NULL)
-    //   throw L4Re::LibLog::Loggable_exception (-L4_EINVAL, "Failed to open");
-    // // Write some text to the file
-    // if (fprintf (fptr, "Some text") < 0)
-    //   throw L4Re::LibLog::Loggable_exception (-L4_EINVAL, "Failed to write");
-    // // char buffer[100];
-    // // fread(buffer, 100, 1, fptr);
-    // // Close the file
-    // fclose (fptr);
-
-
-    // Log::debug (fmt::format ("Read from file {:s}", buffer));
-
-    // std::fstream output_file ("rwfs/output.txt");
-    // if (!output_file)
-    //   throw L4Re::LibLog::Loggable_exception (-L4_EINVAL,
-    //                                           "Failed to open file");
-    // output_file << "Writing this to a file.\n";
-    // output_file.close ();
-
+    /* setup */
     auto manager = MettEagle::getManager ("manager");
-
-
-    // sync clients
-    // x ++;
-    // while (x != 4) {std::this_thread::yield();};
-
-
-    Log::debug ("Register done");
-
-    L4Re::chksys (manager->action_create ("name", action_name),
+    L4Re::chksys (manager->action_create ("testAction", action_name),
                   "action create");
 
-    // Log::debug ("create done");
+    for (int i = 0; i < iterations; i++)
+      {
+        /* invocation */
+        auto before_invocation = std::chrono::high_resolution_clock::now ();
 
-    // std::string answer;
-    // L4Re::chksys (manager->action_invoke ("name", answer), "action invoke");
+        std::string answer;
+        MettEagle::Metadata data;
+        L4Re::chksys (manager->action_invoke ("testAction", "some argument",
+                                              answer, {}, &data),
+                      "action invoke");
 
-    // Log::debug (fmt::format ("got answer {:s}", answer.c_str ()));
+        auto after_invocation = std::chrono::high_resolution_clock::now ();
+
+        /* duration measured inside the application */
+        unsigned long d = std::stoul (answer);
+
+        /**
+         * The metrics will be calculated with a granularity of microseconds
+         * because thats the precision of the kernel clock
+         */
+        // clang-format off
+        unsigned long bi = std::chrono::duration_cast<std::chrono::microseconds> (
+                                before_invocation.time_since_epoch ()).count ();
+        unsigned long ai = std::chrono::duration_cast<std::chrono::microseconds> (
+                                after_invocation.time_since_epoch ()).count ();
+        unsigned long as = std::chrono::duration_cast<std::chrono::microseconds> (
+                                data.start.time_since_epoch ()).count ();
+        unsigned long ae = std::chrono::duration_cast<std::chrono::microseconds> (
+                                data.end.time_since_epoch ()).count ();
+        // clang-format on
+
+        unsigned long ad = ae - as;
+        unsigned long oea = as - bi;
+        unsigned long oer = ae - bi - d;
+        unsigned long ora = ai - ae;
+        unsigned long rtt = ai - bi;
+        unsigned long ortt = rtt - d;
+
+        // update metrics
+
+        metrics.d.addSample (d);
+        metrics.bi.addSample (bi);
+        metrics.ai.addSample (ai);
+        metrics.as.addSample (as);
+        metrics.ae.addSample (ae);
+        metrics.ad.addSample (ad);
+        metrics.oea.addSample (oea);
+        metrics.oer.addSample (oer);
+        metrics.ora.addSample (ora);
+        metrics.rtt.addSample (rtt);
+        metrics.ortt.addSample (ortt);
+      }
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal (fmt::format ("{}", e));
+    Log::fatal ("{}", e);
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal (fmt::format ("{}", e));
+    Log::fatal ("{}", e);
   }
 
 int
@@ -115,30 +218,22 @@ try
     (void)_argv;
     L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
 
-    std::list<std::unique_ptr<std::thread> > thread_list;
+    Log::debug ("Hello from client");
 
-    // std::thread t1(client, "rom/function1");
-
-    for (int i = 0; i < 2; i++)
-      {
-        thread_list.push_back (std::make_unique<std::thread> (
-            client, i == 0 ? "rom/function1" : "rom/function1", i));
-      }
-
-    for (auto &t : thread_list)
-      {
-        t->join ();
-      }
+    std::thread (benchmark, "rom/function1", 10).join ();
+    printf ("====   OUTPUT   ====\n");
+    printf ("%s\n", metrics.toString ().c_str ());
+    printf ("==== END OUTPUT ====\n");
 
     return EXIT_SUCCESS;
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal (fmt::format ("{}", e));
+    Log::fatal ("{}", e);
     return e.err_no ();
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal (fmt::format ("{}", e));
+    Log::fatal ("{}", e);
     return e.err_no ();
   }

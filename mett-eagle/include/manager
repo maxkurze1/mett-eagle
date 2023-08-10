@@ -26,9 +26,9 @@
 #include <l4/sys/cxx/ipc_iface>
 #include <l4/sys/cxx/ipc_types>
 
-#include <l4/liblog/loggable-exception>
-#include <l4/liblog/log>
 #include <l4/fmt/core.h>
+#include <l4/liblog/log>
+#include <l4/liblog/loggable-exception>
 
 #include <string>
 
@@ -50,6 +50,21 @@ enum Protocol
   // clang-format on
 };
 
+struct Config
+{
+  /** 
+   * the memory limit in bytes
+   * 0 means 'no limit'
+   */
+  l4_mword_t memory_limit = 0;
+};
+
+struct Metadata
+{
+  std::chrono::time_point<std::chrono::high_resolution_clock> start;
+  std::chrono::time_point<std::chrono::high_resolution_clock> end;
+};
+
 /**
  * @brief Part of the interface that will be shared by clients and workers
  */
@@ -65,6 +80,7 @@ struct Manager_Base
    *       another client.
    *
    * @param[in]  name  Name of the function to invoke
+   * @param[in]  arg   Argument to the function
    * @param[out] ret   Return value of the function
    *
    * @return  L4_EOK
@@ -76,46 +92,53 @@ struct Manager_Base
    *            the message (with null-terminator)
    */
   l4_msgtag_t
-  action_invoke (L4::Ipc::String<> name, L4::Ipc::Array<char> &ret)
+  action_invoke (L4::Ipc::String<> name, L4::Ipc::String<> arg,
+                 L4::Ipc::Array<char> &ret, Config cfg = {}, Metadata *data = nullptr)
   {
-    return action_invoke_t::call (c (), name, ret);
+    Metadata _data;
+    return action_invoke_t::call (c (), name, arg, ret, cfg, data ?: &_data);
   }
 
   /**
    * @brief Invoke a serverless function
    *
    * This is a utility function for
-   * action_invoke(L4::Ipc::String,L4::Ipc::Array<char>)
+   * action_invoke(L4::Ipc::String<>,L4::Ipc::String<>,L4::Ipc::Array<char>)
    *
    * This implementation will automatically create a buffer that is large
    * enough to receive the ipc answer and convert it to a std::string.
    *
    * @param[in]  name  Name of the function to invoke
+   * @param[in]  arg   Argument to the function
    * @param[out] ret   Return value of the function
    *
-   * @return @see action_invoke(L4::Ipc::String,L4::Ipc::Array<char>)
+   * @return @see
+   * action_invoke(L4::Ipc::String<>,L4::Ipc::String<>,L4::Ipc::Array<char>)
    *
-   * @throws L4Re::LibLog::Loggable_exception(-L4_EMSGTOOLONG) if allocated buffer
-   * is too small
+   * @throws L4Re::LibLog::Loggable_exception(-L4_EMSGTOOLONG) if allocated
+   * buffer is too small
    */
   l4_msgtag_t
-  action_invoke (L4::Ipc::String<> name, std::string &ret)
+  action_invoke (L4::Ipc::String<> name, L4::Ipc::String<> arg,
+                 std::string &ret, Config cfg = {}, Metadata *data = nullptr)
   {
+    Metadata _data;
     /* allocate client receive buffer with max message length */
     char buffer[L4::Ipc::Msg::Mr_bytes];
     L4::Ipc::Array<char> arr (sizeof (buffer), buffer);
-    l4_msgtag_t mt = action_invoke_t::call (c (), name, arr);
+    l4_msgtag_t mt = action_invoke_t::call (c (), name, arg, arr, cfg, data ?: &_data);
     /* ret will always be 0 terminated - if not, it was truncated */
     if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))
-      throw LibLog::Loggable_exception (-L4_EMSGTOOLONG,
-                                    "The client receive buffer is too small");
+      throw LibLog::Loggable_exception (
+          -L4_EMSGTOOLONG, "The client receive buffer is too small");
     /* create a std::string copy of the data */
-    ret = arr.data;
+    ret = std::string (arr.data);
     return mt;
   }
 
   L4_INLINE_RPC_NF (l4_msgtag_t, action_invoke,
-                    (L4::Ipc::String<> name, L4::Ipc::Array<char> &ret));
+                    (L4::Ipc::String<> name, L4::Ipc::String<> arg,
+                     L4::Ipc::Array<char> &ret, Config cfg, Metadata *data));
 
   typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
 };
@@ -142,6 +165,7 @@ struct Manager_Client
    *
    * @param[in] name  Name that will identify the action
    * @param[in] file  Dataspace capability representing the binary file
+   * 
    * @return          L4_EOK on success
    * @return          -L4_EINVAL if no capability was received
    * @return          -L4_ENOMEM if no server ipc gate could be allocated
@@ -160,7 +184,10 @@ struct Manager_Client
    *
    * @param[in] name            Name of the action
    * @param[in] pathname        L4Re::Env_ns name of the file
-   * @throws L4Re::LibLog::Loggable_exception  if file 'pathname' couldn't be found
+   * 
+   * @throws L4Re::LibLog::Loggable_exception  if file 'pathname' couldn't be
+   * found
+   * 
    * @return          L4_EOK on success
    * @return          -L4_EINVAL if no capability was received
    * @return          -L4_ENOMEM if no server ipc gate could be allocated
@@ -171,8 +198,9 @@ struct Manager_Client
   {
     auto file = L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname);
     if (L4_UNLIKELY (not file.is_valid ()))
-      throw LibLog::Loggable_exception (-L4_EINVAL, fmt::format("Couldn't find file '{:s}'", pathname));
-    L4Re::LibLog::Log::debug(fmt::format("Dataspace cap idx {:#x}", file.cap()));
+      throw LibLog::Loggable_exception (
+          -L4_EINVAL, fmt::format ("Couldn't find file '{:s}'", pathname));
+    L4Re::LibLog::Log::debug ("Dataspace cap idx {:#x}", file.cap ());
     return action_create_t::call (c (), name, file);
   }
 

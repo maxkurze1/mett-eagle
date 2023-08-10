@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -26,17 +27,17 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
-#include <chrono>
+#include <tuple>
 
+#include <l4/fmt/chrono.h> // formatting of std::chrono
 #include <l4/fmt/core.h>
 #include <l4/fmt/std.h> // formatting of std::thread::id
-#include <l4/fmt/chrono.h> // formatting of std::chrono
 
-#include <l4/cxx/exceptions>
-#include <l4/liblog/loggable-exception>
+// #include <l4/cxx/exceptions>
+// #include <l4/liblog/loggable-exception>
 #include <l4/re/env>
-#include <l4/re/error_helper>
-#include <l4/sys/err.h>
+// #include <l4/re/error_helper>
+// #include <l4/sys/err.h>
 #include <l4/sys/semaphore>
 
 namespace L4Re
@@ -99,6 +100,30 @@ public:
   };
 
   /**
+   * A class to pass a format string while capturing the source location of the
+   * invocation
+   *
+   * This workaround is necessary since it is not possible to pass the location
+   * as default arguments while allowing a variable number of arguments for the
+   * printing
+   */
+  class Format
+  {
+  public:
+    const char *format;
+    const char *file;
+    const char *function;
+    const int line;
+
+    Format (const char *format, const char *file = __builtin_FILE (),
+            const char *function = __builtin_FUNCTION (),
+            const int line = __builtin_LINE ())
+        : format (format), file (file), function (function), line (line)
+    {
+    }
+  };
+
+  /**
    * @brief Set the output level of the log
    */
   inline static void
@@ -116,8 +141,12 @@ public:
     char *lvl = getenv ("LOG_LEVEL");
     // clang-format off
     if (lvl)
+#ifdef __EXCEPTIONS
       try { return std::stoi (lvl); }
       catch (std::invalid_argument &) {}
+#else
+      return atoi(lvl);
+#endif
     // clang-format on
     return Level::INFO;
   }
@@ -154,12 +183,11 @@ public:
    * L4Re::LibLog::Log::debug("some debug %s", "message");
    * @endcode
    */
+  template <typename... Args>
   inline static void
-  debug (std::string msg, char const *const file = __builtin_FILE (),
-         char const *const function = __builtin_FUNCTION (),
-         const int line = __builtin_LINE ())
+  debug (Format msg, Args... args)
   {
-    printf (MsgLevel::DEBUG, file, function, line, msg);
+    printf (MsgLevel::DEBUG, msg.file, msg.function, msg.line, msg.format, args...);
   }
 
   /**
@@ -174,12 +202,11 @@ public:
    * L4Re::LibLog::Log::info("some info %s", "message");
    * @endcode
    */
+  template <typename... Args>
   inline static void
-  info (std::string msg, char const *const file = __builtin_FILE (),
-        char const *const function = __builtin_FUNCTION (),
-        const int line = __builtin_LINE ())
+  info (Format msg, Args... args)
   {
-    printf (MsgLevel::INFO, file, function, line, msg);
+    printf (MsgLevel::INFO, msg.file, msg.function, msg.line, msg.format, args...);
   }
   /**
    * @brief Write a warn message to the log
@@ -193,12 +220,11 @@ public:
    * L4Re::LibLog::Log::warn("some warn %s", "message");
    * @endcode
    */
+  template <typename... Args>
   inline static void
-  warn (std::string msg, char const *const file = __builtin_FILE (),
-        char const *const function = __builtin_FUNCTION (),
-        const int line = __builtin_LINE ())
+  warn (Format msg, Args... args)
   {
-    printf (MsgLevel::WARN, file, function, line, msg);
+    printf (MsgLevel::WARN, msg.file, msg.function, msg.line, msg.format, args...);
   }
   /**
    * @brief Write an error message to the log
@@ -212,12 +238,11 @@ public:
    * L4Re::LibLog::Log::error("some error %s", "message");
    * @endcode
    */
+  template <typename... Args>
   inline static void
-  error (std::string msg, char const *const file = __builtin_FILE (),
-         char const *const function = __builtin_FUNCTION (),
-         const int line = __builtin_LINE ())
+  error (Format msg, Args&&... args)
   {
-    printf (MsgLevel::ERROR, file, function, line, msg);
+    printf (MsgLevel::ERROR, msg.file, msg.function, msg.line, msg.format, args...);
   }
   /**
    * @brief  Write a fatal message to the log
@@ -231,12 +256,11 @@ public:
    * L4Re::LibLog::Log::fatal("some fatal %s", "message");
    * @endcode
    */
+  template <typename... Args>
   inline static void
-  fatal (std::string msg, char const *const file = __builtin_FILE (),
-         char const *const function = __builtin_FUNCTION (),
-         const int line = __builtin_LINE ())
+  fatal (Format msg, Args... args)
   {
-    printf (MsgLevel::FATAL, file, function, line, msg);
+    printf (MsgLevel::FATAL, msg.file, msg.function, msg.line, msg.format, args...);
   }
 
   /**
@@ -253,14 +277,11 @@ public:
    *                  __builtin_LINE
    * @param fmt       A format string.
    * @param args      The arguments for the format string.
-   *
-   * Even if args is a variadic argument template the function it still needs
-   * to be defined in a header file, just like normal templates.
    */
   template <typename... Args>
   inline static void
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, std::string msg)
+  printf (MsgLevel msg_lvl, const char *file, const char *function,
+          const int line, const char *fmt, Args&&... args)
   {
 #ifndef NDEBUG
     /* check if message should be silenced */
@@ -270,17 +291,12 @@ public:
     /* output the Level prefix */
     const char *severity = severity_str (msg_lvl);
 
-    // std::stringstream thread_id_string;
-    // // 10 width = 2 for '0x' prefix 8 for the 8 hexadecimal digits
-    // // this assumes 64bit thread ids
-    // thread_id_string << std::setw (10) << std::this_thread::get_id ();
-
-    auto now = std::chrono::high_resolution_clock::now();
-    // auto [ss, ms, us] = break_down_durations<std::chrono::seconds, std::chrono::milliseconds, std::chrono::microseconds>( now.time_since_epoch() );
+    auto now = std::chrono::high_resolution_clock::now ();
 
     using namespace fmt::literals; // necessary for the ""_a literals for named
                                    // format args
-    auto t_id = std::this_thread::get_id();
+    auto t_id = std::this_thread::get_id ();
+    // clang-format off
     std::string out_string = fmt::format (
         "\033[2m{thread_id:>10} {time:%T}\033[0m {severity:s} {pkgname:s} \033[2m<{file:s}:{line:d}> {function:s}\033[0m {msg:s}\n",
         "thread_id"_a = t_id,
@@ -290,7 +306,9 @@ public:
         "file"_a = file + std::string (file).find_last_of('/') + 1,
         "line"_a = line,
         "function"_a = function,
-        "msg"_a = msg);
+        "msg"_a = fmt::format(fmt, args...));
+    // clang-format on
+    // TODO use strrchr instead of find last
 
     /**
      * Call print only once with the whole string.
@@ -300,7 +318,8 @@ public:
      */
     auto sema = Env::env ()->get_cap<L4::Semaphore> ("log_sync");
 
-    l4_umword_t store = l4_utcb_mr ()->mr[0]; // sema->down will change the first mr
+    l4_umword_t store
+        = l4_utcb_mr ()->mr[0]; // sema->down will change the first mr
     if (sema.is_valid ())
       sema->down ();
 
@@ -333,13 +352,13 @@ public:
    *
    * All argument are just passed to the general Log::printf
    */
-  inline static void
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, L4::Base_exception &exception)
-  {
-    printf (msg_lvl, file, function, line,
-            fmt::format ("{:s}", exception.str ()));
-  }
+  // inline static void
+  // printf (MsgLevel msg_lvl, char const *const file, char const *const function,
+  //         const int line, L4::Base_exception &exception)
+  // {
+  //   printf (msg_lvl, file, function, line,
+  //           fmt::format ("{:s}", exception.str ()));
+  // }
 
   /**
    * @brief Helper method to log Runtime_error
@@ -360,14 +379,14 @@ public:
    *   }
    * @endcode
    */
-  inline static void
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, L4::Runtime_error &exception)
-  {
-    printf (
-        msg_lvl, file, function, line,
-        fmt::format ("{:s}: {:s}", exception.str (), exception.extra_str ()));
-  }
+  // inline static void
+  // printf (MsgLevel msg_lvl, char const *const file, char const *const function,
+  //         const int line, L4::Runtime_error &exception)
+  // {
+  //   printf (
+  //       msg_lvl, file, function, line,
+  //       fmt::format ("{:s}: {:s}", exception.str (), exception.extra_str ()));
+  // }
 
   /**
    * @brief Helper method to log Loggable_exceptions
@@ -389,17 +408,17 @@ public:
    *   }
    * @endcode
    */
-  inline static void
-  printf (MsgLevel msg_lvl, char const *const file, char const *const function,
-          const int line, Loggable_exception &exc)
-  {
-    /* location of print statement is discarded */
-    (void)file;
-    (void)function;
-    (void)line;
-    printf (msg_lvl, exc.file (), exc.function (), exc.line (),
-            fmt::format ("{:s}: {:s}", exc.str (), exc.msg ()));
-  }
+  // inline static void
+  // printf (MsgLevel msg_lvl, char const *const file, char const *const function,
+  //         const int line, Loggable_exception &exc)
+  // {
+  //   /* location of print statement is discarded */
+  //   (void)file;
+  //   (void)function;
+  //   (void)line;
+  //   printf (msg_lvl, exc.file (), exc.function (), exc.line (),
+  //           fmt::format ("{:s}: {:s}", exc.str (), exc.msg ()));
+  // }
 #endif // ifdef __EXCEPTIONS
 
 private:

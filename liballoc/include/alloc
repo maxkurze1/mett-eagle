@@ -13,6 +13,7 @@
  *
  * @headerfile <l4/liballoc/alloc>
  */
+#pragma once
 
 #include <atomic>
 #include <l4/re/cap_alloc>
@@ -48,17 +49,17 @@ namespace Alloc
  *
  * @note The operations in this class *are thread-safe*.
  *
- * @tparam DATATYPE  The datatype used by the per-cap counter values. The
+ * @tparam COUNTER_TYPE  The datatype used by the per-cap counter values. The
  *                   provided type need to be applicable to
- *                   std::atomic<DATATYPE>.
+ *                   std::atomic<COUNTER_TYPE>.
  * @tparam CAP_NUM   The number of capabilities that are managed by this
  *                   allocator
  */
-template <typename DATATYPE = unsigned char, int CAPACITY = 4096>
+template <typename COUNTER_TYPE = unsigned char, int CAPACITY = 4096>
 class Safe_counting_cap_alloc : public Cap_alloc
 {
 private:
-  std::atomic<DATATYPE> _items[CAPACITY];
+  std::atomic<COUNTER_TYPE> _items[CAPACITY];
   std::atomic<long> _free_hint = 0;
   const long _bias;
 
@@ -76,8 +77,15 @@ public:
   Safe_counting_cap_alloc () noexcept
       : _bias (L4Re::Env::env ()->first_free_cap () + 1)
   {
-    // _sema = L4::Cap<L4::Semaphore> (e->first_free_cap () << L4_CAP_SHIFT);
-    // l4_check (l4_error (l4_msgtag_t (e->factory ()->create (_sema))) >= 0);
+
+    // L4Re::Env const *e = L4Re::Env::env ();
+    // L4::Cap<L4Re::Dataspace> _ds (e->first_free_cap () << L4_CAP_SHIFT);
+    // l4_check (e->mem_alloc ()->alloc (sizeof (COUNTER_TYPE) * CAPACITY, _ds)
+    //           >= 0);
+    // l4_check (e->rm ()->attach (&_items, sizeof (COUNTER_TYPE) * CAPACITY,
+    //                             L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
+    //                             L4::Ipc::make_cap_rw (_ds))
+    //           >= 0);
   }
 
 public:
@@ -94,7 +102,7 @@ public:
   L4::Cap<void>
   alloc () noexcept
   {
-    DATATYPE expected;
+    COUNTER_TYPE expected;
     for (long i = _free_hint; i < CAPACITY; ++i)
       {
         expected = 0;
@@ -109,9 +117,12 @@ public:
   }
 
   ///@copydoc alloc()
-  template< typename T >
-  L4::Cap<T> alloc() noexcept
-  { return L4::cap_cast<T>(alloc()); }
+  template <typename T>
+  L4::Cap<T>
+  alloc () noexcept
+  {
+    return L4::cap_cast<T> (alloc ());
+  }
 
   /**
    * Increase the reference counter for the capability.
@@ -191,9 +202,9 @@ public:
       return false;
 
     l4_assert (_items[c].load () >= 0);
-    
+
     // subtract 1 and check if old value was 1
-    if (_items[c].fetch_sub (1) == 1) 
+    if (_items[c].fetch_sub (1) == 1)
       {
         if (task != L4_INVALID_CAP)
           l4_task_unmap (task, cap.fpage (), unmap_flags);
@@ -205,6 +216,14 @@ public:
         return true;
       }
     return false;
+  }
+
+  /**
+   * Return highest capability id managed by this allocator.
+   */
+  long last() noexcept
+  {
+    return CAPACITY + _bias - 1;
   }
 
 private:
@@ -221,7 +240,7 @@ private:
   }
 };
 
-extern Safe_counting_cap_alloc<> safe_cap_alloc;
+// extern Safe_counting_cap_alloc<> safe_cap_alloc;
 
 }
 

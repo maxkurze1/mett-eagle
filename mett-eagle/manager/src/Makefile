@@ -5,6 +5,6 @@ TARGET   = mett-eagle
 SRC_CC   = $(patsubst $(SRC_DIR)/%,%,$(wildcard $(SRC_DIR)/*.cc))
 
 REQUIRES_LIBS = libloader l4re-util l4re libc_support_misc \
-                libpthread cxx_libc_io cxx_io libstdc++ libfmt liballoc
+                libpthread cxx_libc_io cxx_io libstdc++ libfmt
 
 include $(L4DIR)/mk/prog.mk
