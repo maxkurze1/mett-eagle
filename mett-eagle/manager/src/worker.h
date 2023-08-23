@@ -15,6 +15,8 @@
 #include <string>
 #include <utility>
 
+#include <l4/liblog/log>
+
 /**
  * App model that is really used in the end to start the worker process
  *
@@ -288,7 +290,8 @@ public:
   {
     if (not L4Re::Env::Cap_entry::is_valid_name (name.c_str ()))
       {
-        Log::error ("Capability name '{}' too long", name);
+        using namespace L4Re::LibLog;
+        log<ERROR> ("Capability name '{}' too long", name);
         return;
       }
     _initial_capabilities.push_back ({cap, name, rights, flags});

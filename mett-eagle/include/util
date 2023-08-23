@@ -51,7 +51,7 @@ getManager (const char *const cap_name)
   auto manager_cap = L4Re::chkcap (
       L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
       "allocate manager capability");
-  L4Re::LibLog::Log::debug("manager cap idx {:#x}", manager_cap.cap());
+  L4Re::LibLog::log<L4Re::LibLog::DEBUG>("manager cap idx {:#x}", manager_cap.cap());
   /* register ipc call, see MettEagle::Manager_Registry */
   L4Re::chksys (manager_registry->register_client (manager_cap),
                 "register_client");

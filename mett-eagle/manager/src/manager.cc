@@ -39,6 +39,7 @@
 namespace MettEagle = L4Re::MettEagle;
 using L4Re::LibLog::chksys;
 using L4Re::LibLog::Loggable_exception;
+using namespace L4Re::LibLog;
 
 struct Manager_Base_Epiface : L4::Epiface_t0<MettEagle::Manager_Base>
 {
@@ -97,7 +98,7 @@ public:
                     L4::Ipc::Snd_fpage file)
   {
     const char *name = _name.data;
-    Log::debug ("Create action name='{:s}' file passed='{}'",
+    log<DEBUG> ("Create action name='{:s}' file passed='{}'",
                              name, file.cap_received ());
     if (L4_UNLIKELY (not file.cap_received ()))
       throw Loggable_exception (-L4_EINVAL, "No dataspace cap received");
@@ -172,7 +173,7 @@ public:
         auto err = static_cast<int> (val);
         /* faas function probably threw an error   *
          * in this case value holds the error code */
-        Log::error (
+        log<ERROR> (
             "Worker finished with wrong exit! - {:s} (=exit: {:d})",
             l4sys_errtostr (err), err);
         // TODO return error to parent
@@ -198,7 +199,7 @@ public:
 
     const char *value = _value.data;
 
-    Log::debug ("Worker exit: {:s}", value);
+    log<DEBUG> ("Worker exit: {:s}", value);
     // terminate ();
     _worker->exit (value);
     L4Re::Env::env ()->task ()->release_cap (obj_cap ());
@@ -220,7 +221,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
 {
   const char *name = _name.data;
 
-  Log::debug ("Invoke action name='{:s}'", name);
+  log<DEBUG> ("Invoke action name='{:s}'", name);
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name) == 0))
     throw Loggable_exception (-L4_EINVAL,
@@ -368,7 +369,7 @@ struct Manager_Registry_Epiface
       MettEagle::Manager_Registry::Rights,
       L4::Ipc::Cap<MettEagle::Manager_Client> &manager_ipc_gate)
   {
-    Log::debug ("Registering client");
+    log<DEBUG> ("Registering client");
 
     // TODO cap alloc is not thread safe
 
@@ -416,7 +417,7 @@ struct Manager_Registry_Epiface
     int test = 4;
     // L4Re::LibLog::chksys (client_thread->control (attr), "setup app
     // thread %d", test, [](const l4_msgtag_t &tag) -> void {
-    //   Log::debug("called callback");
+    //   log<DEBUG>("called callback");
     // });
 
     auto stack_cap = L4Re::chkcap (
@@ -440,7 +441,7 @@ struct Manager_Registry_Epiface
         "start app thread");
 
     // run thread
-    Log::debug ("running test thread");
+    log<DEBUG> ("running test thread");
 
     L4Re::chksys (env->scheduler ()->run_thread (
         client_thread, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
@@ -457,7 +458,7 @@ struct Manager_Registry_Epiface
      * client.
      */
     l4_umword_t bitmap = select_client_cpu ();
-    Log::debug ("Selected cpu {:b}", bitmap);
+    log<DEBUG> ("Selected cpu {:b}", bitmap);
 
     L4Re::chksys (
         l4_msgtag_t (
@@ -499,7 +500,7 @@ struct Manager_Registry_Epiface
           /* free the allocated pointer again - do *not* free the object */
           delete arg;
 
-          Log::info ("Start client ipc server");
+          log<INFO> ("Start client ipc server");
 
           /**
            * TODO end loop and exit thread after client disconnect to free
@@ -518,7 +519,7 @@ struct Manager_Registry_Epiface
         client_server_pointer);
     if (failed)
       {
-        Log::error ("failed to create thread");
+        log<ERROR> ("failed to create thread");
       }
 
     pthread_attr_destroy (&attr);
@@ -621,7 +622,7 @@ try
     /* update global bitmap */
     available_cpus = cpus.map;
 
-    Log::info (
+    log<INFO> (
         "Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
                      cpus.map, cpu_max, available_cpus.count (), cpu_max);
 
@@ -635,7 +636,7 @@ try
                   "Couldn't register service, is there a 'server' in "
                   "the caps table?");
 
-    Log::info ("Starting Mett-Eagle registry server!");
+    log<INFO> ("Starting Mett-Eagle registry server!");
 
     // start server loop -- loop will not return!
     // started with custom dispatch to log errors
@@ -649,11 +650,11 @@ try
  */
 catch (L4::Runtime_error &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no ();
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no ();
   }

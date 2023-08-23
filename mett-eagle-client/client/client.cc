@@ -33,7 +33,7 @@
 #include <numeric>
 
 namespace MettEagle = L4Re::MettEagle;
-using L4Re::LibLog::Log;
+using namespace L4Re::LibLog;
 
 template <typename TYPE = l4_uint64_t, typename D_TYPE = double> struct Metric
 {
@@ -203,11 +203,11 @@ try
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
   }
 
 int
@@ -218,7 +218,7 @@ try
     (void)_argv;
     L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
 
-    Log::debug ("Hello from client");
+    log<DEBUG> ("Hello from client");
 
     std::thread (benchmark, "rom/function1", 10).join ();
     printf ("====   OUTPUT   ====\n");
@@ -229,11 +229,11 @@ try
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no ();
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no ();
   }

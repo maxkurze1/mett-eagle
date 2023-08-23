@@ -19,7 +19,7 @@
 
 #include <l4/fmt/core.h>
 
-using L4Re::LibLog::Log;
+using namespace L4Re::LibLog;
 using L4Re::LibLog::Loggable_exception;
 
 /**
@@ -49,16 +49,16 @@ try
  */
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal ("{}",e);
+    log<FATAL> ("{}",e);
     return e.err_no (); // propagate the error to the client
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal ("{}",e);
+    log<FATAL> ("{}",e);
     return e.err_no (); // propagate the error to the client
   }
 catch (... /* catch all */)
   {
-    Log::fatal ("Function threw unknown error.");
+    log<FATAL> ("Function threw unknown error.");
     return -L4_EINVAL;
   }

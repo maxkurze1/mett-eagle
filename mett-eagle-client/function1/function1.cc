@@ -6,7 +6,7 @@
 #include <l4/re/env>
 #include <list>
 
-using L4Re::LibLog::Log;
+using namespace L4Re::LibLog;
 
 constexpr unsigned long chunk_size = 8192UL;
 
@@ -17,7 +17,7 @@ Main (std::string args)
 {
   auto start = std::chrono::high_resolution_clock::now ();
 
-  Log::info ("Hello from function1, param: {}", args);
+  log<INFO> ("Hello from function1, param: {}", args);
 
   std::this_thread::sleep_for(std::chrono::milliseconds(500));
   // std::string ans = L4Re::Faas::invoke("test_idk");
@@ -28,7 +28,7 @@ Main (std::string args)
   //   memset(some_mem, 0xFF, chunk_size);
   //   mem.push_back(some_mem); // keep reference
   //   size += chunk_size;
-  //   Log::info(fmt::format("Malloced {}", size));
+  //   log<INFO>(fmt::format("Malloced {}", size));
   // }
   auto end = std::chrono::high_resolution_clock::now ();
 

@@ -17,8 +17,6 @@
 #include <l4/liblog/log>
 #include <l4/re/util/debug>
 
-using L4Re::LibLog::Log;
-
 /**
  * @brief This call will provide all functions that are needed but not
  * implemented by Base_app_model/Loader and Remote_app_model
@@ -149,10 +147,11 @@ struct App_model : public Ldr::Base_app_model<Stack>
     if (l4_error (t))
       return t;
 
-    l4_sched_param_t sp = l4_sched_param(L4_SCHED_MIN_PRIO);
+    l4_sched_param_t sp = l4_sched_param (L4_SCHED_MIN_PRIO);
     sp.affinity = cpus;
 
-    Log::debug("Scheduling on cpu {:x}", cpus.map);
+    using namespace L4Re::LibLog;
+    log<DEBUG> ("Scheduling on cpu {:x}", cpus.map);
 
     return scheduler->run_thread (thread, sp);
   }

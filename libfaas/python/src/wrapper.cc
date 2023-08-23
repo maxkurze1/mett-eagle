@@ -21,7 +21,7 @@
 
 #include <l4/fmt/core.h>
 
-using L4Re::LibLog::Log;
+using namespace L4Re::LibLog;
 using L4Re::LibLog::Loggable_exception;
 
 static void
@@ -41,17 +41,17 @@ invoke_python_main ()
   Py_InitializeFromConfig (&config);
   // pName = PyString_FromString ("rom/test.py");
   /* Error checking of pName left out */
-  Log::debug ("Py_Init done");
+  log<DEBUG> ("Py_Init done");
 
   pModule = PyImport_AddModule ("__main__");
 
-  Log::debug ("Added module");
+  log<DEBUG> ("Added module");
 
   PyRun_SimpleString ("def test_function(str):\n  return \"some answer\"");
   PyRun_SimpleString ("import sys;"
                       "print(\"hello world\", file=sys.stderr)");
 
-  Log::debug ("Ran string");
+  log<DEBUG> ("Ran string");
 
   if (pModule != NULL)
     {
@@ -117,7 +117,7 @@ try
           fmt::format ("Wrong number of arguments. Expected 1 got {:d}",
                        argc));
 
-    Log::debug ("Trying to invoke python");
+    log<DEBUG> ("Trying to invoke python");
     /* actual call to the faas function */
     invoke_python_main ();
 
@@ -134,16 +134,16 @@ try
  */
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no (); // propagate the error to the client
   }
 catch (L4::Runtime_error &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no (); // propagate the error to the client
   }
 catch (... /* catch all */)
   {
-    Log::fatal ("Function threw unknown error.");
+    log<FATAL> ("Function threw unknown error.");
     return -L4_EINVAL;
   }

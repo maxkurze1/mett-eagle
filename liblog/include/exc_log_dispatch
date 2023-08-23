@@ -10,7 +10,7 @@
 #pragma once
 
 #include <l4/sys/cxx/ipc_server_loop>
-// #include <l4/cxx/exceptions>
+#include <l4/cxx/exceptions>
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
 
@@ -33,28 +33,29 @@ struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
   l4_msgtag_t
   operator() (l4_msgtag_t tag, l4_umword_t obj, l4_utcb_t *utcb)
   {
+    using namespace L4Re::LibLog;
     try
       {
         return L4::Ipc_svr::Direct_dispatch<R>::operator() (tag, obj, utcb);
       }
-    catch (L4Re::LibLog::Loggable_exception &e)
+    catch (Loggable_exception &e)
       {
-        L4Re::LibLog::Log::error ("{}", e);
+        log<ERROR> ("{}", e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Runtime_error &e)
       {
-        L4Re::LibLog::Log::error ("{}", e);
+        log<ERROR> ("{}", e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Base_exception &e)
       {
-        L4Re::LibLog::Log::error ("{}", e);
+        log<ERROR> ("{}", e);
         return l4_msgtag (-L4_EINVAL, 0, 0, 0);
       }
     catch (long err)
       {
-        L4Re::LibLog::Log::error (l4sys_errtostr (err));
+        log<ERROR> (l4sys_errtostr (err));
         return l4_msgtag (err, 0, 0, 0);
       }
   }
