@@ -90,8 +90,8 @@ template <typename TYPE = l4_uint64_t, typename D_TYPE = double> struct Metric
   std::string
   toString ()
   {
-    return fmt::format ("{{\"sum\"={},\"min\"={},\"max\"={},\"avg\"={},"
-                        "\"cnt\"={},\n\"samples\"={}}}",
+    return fmt::format ("{{\"sum\":{},\"min\":{},\"max\":{},\"avg\":{},"
+                        "\"cnt\":{},\n\"samples\":{}}}",
                         sum (), min (), max (), avg (), cnt (), samples);
     // return fmt::format("{}", samples);
   }
@@ -119,30 +119,29 @@ struct Metrics
   toString ()
   {
     return fmt::format ("{{\n"
-                        "\"d\" = {},\n"
-                        "\"bi\" = {},\n"
-                        "\"ai\" = {},\n"
-                        "\"as\" = {},\n"
-                        "\"ae\" = {},\n"
-                        "\"ad\" = {},\n"
-                        "\"oea\" = {},\n"
-                        "\"oer\" = {},\n"
-                        "\"ora\" = {},\n"
-                        "\"rtt\" = {},\n"
-                        "\"ortt\" = {}\n"
+                        "\"d\" : {},\n"
+                        "\"bi\" : {},\n"
+                        "\"ai\" : {},\n"
+                        "\"as\" : {},\n"
+                        "\"ae\" : {},\n"
+                        "\"ad\" : {},\n"
+                        "\"oea\" : {},\n"
+                        "\"oer\" : {},\n"
+                        "\"ora\" : {},\n"
+                        "\"rtt\" : {},\n"
+                        "\"ortt\" : {}\n"
                         "}}",
                         d.toString (), bi.toString (), ai.toString (),
                         as.toString (), ae.toString (), ad.toString (),
                         oea.toString (), oer.toString (), ora.toString (),
                         rtt.toString (), ortt.toString ());
   }
-} metrics;
+};
 
 static void
-benchmark (const char *action_name, int iterations)
+benchmark (const char *action_name, int iterations, Metrics *metrics)
 try
   {
-
     /* setup */
     auto manager = MettEagle::getManager ("manager");
     L4Re::chksys (manager->action_create ("testAction", action_name),
@@ -188,17 +187,17 @@ try
 
         // update metrics
 
-        metrics.d.addSample (d);
-        metrics.bi.addSample (bi);
-        metrics.ai.addSample (ai);
-        metrics.as.addSample (as);
-        metrics.ae.addSample (ae);
-        metrics.ad.addSample (ad);
-        metrics.oea.addSample (oea);
-        metrics.oer.addSample (oer);
-        metrics.ora.addSample (ora);
-        metrics.rtt.addSample (rtt);
-        metrics.ortt.addSample (ortt);
+        metrics->d.addSample (d);
+        metrics->bi.addSample (bi);
+        metrics->ai.addSample (ai);
+        metrics->as.addSample (as);
+        metrics->ae.addSample (ae);
+        metrics->ad.addSample (ad);
+        metrics->oea.addSample (oea);
+        metrics->oer.addSample (oer);
+        metrics->ora.addSample (ora);
+        metrics->rtt.addSample (rtt);
+        metrics->ortt.addSample (ortt);
       }
   }
 catch (L4Re::LibLog::Loggable_exception &e)
@@ -210,19 +209,40 @@ catch (L4::Runtime_error &e)
     log<FATAL> ("{}", e);
   }
 
+static constexpr int THREAD_NUM = 13;
+static constexpr int ITERATIONS = 10;
+
+Metrics metrics_arr[THREAD_NUM];
+
+std::list<std::thread> threads;
+
+#include <l4/re/util/shared_cap>
+
 int
-main (const int _argc, const char *const _argv[])
+main (const int /* argc */, const char *const /* argv */[])
 try
   {
-    (void)_argc;
-    (void)_argv;
+    /* increase log semaphore once to prevent deadlock ... TODO this would fit
+     * better into the .cfg */
     L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
 
     log<DEBUG> ("Hello from client");
 
-    std::thread (benchmark, "rom/function1", 10).join ();
+    /* start threads */
+    for (int i = 0; i < THREAD_NUM; i++)
+      threads.push_back (std::thread (benchmark, "rom/function1",
+      ITERATIONS,
+                                      &metrics_arr[i]));
+
+    /* join threads */
+    for (std::thread &t : threads)
+      t.join ();
+
     printf ("====   OUTPUT   ====\n");
-    printf ("%s\n", metrics.toString ().c_str ());
+    for (int i = 0; i < THREAD_NUM; i++)
+      {
+        printf ("%s\n", metrics_arr[i].toString ().c_str ());
+      }
     printf ("==== END OUTPUT ====\n");
 
     return EXIT_SUCCESS;
@@ -237,3 +257,32 @@ catch (L4::Runtime_error &e)
     log<FATAL> ("{}", e);
     return e.err_no ();
   }
+
+
+// shared_cap test
+
+    // L4Re::Util::cap_alloc.print ();
+
+    // log<DEBUG> ("cap_alloc.alloc");
+
+    // L4::Cap<void> cap = L4Re::Util::cap_alloc.alloc ();
+    // L4Re::Util::cap_alloc.print ();
+
+    // log<DEBUG> ("creating Shared_cap");
+
+    // auto sh_cap = L4Re::Util::Shared_cap<void> (cap);
+    // L4Re::Util::cap_alloc.print ();
+
+    // log<DEBUG> ("copy shared");
+
+    // {
+    //   L4Re::Util::Shared_cap<void> sc2 = sh_cap;
+    //   L4Re::Util::cap_alloc.print ();
+    
+    // log<DEBUG> ("delete copy");
+    // }
+    // L4Re::Util::cap_alloc.print ();
+
+    // log<DEBUG> ("2nd shared_cap of some cap");
+    // L4Re::Util::Shared_cap<void> sc3(cap);
+    // L4Re::Util::cap_alloc.print ();

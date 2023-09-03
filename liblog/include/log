@@ -41,6 +41,8 @@
 // #include <l4/sys/err.h>
 #include <l4/sys/semaphore>
 
+#include <l4/liblog/arg_with_location>
+
 namespace L4Re
 {
 
@@ -93,54 +95,6 @@ namespace LibLog
 //   // clang-format on
 // };
 
-// /**
-//  * @brief Set the output level of the log
-//  */
-// inline static void
-// setLevel (l4_uint8_t lvl)
-// {
-//   setenv ("LOG_LEVEL", std::to_string (lvl).c_str (), true);
-// }
-
-// /**
-//  * @brief Get the output log level
-//  */
-// inline static l4_uint8_t
-// getLevel ()
-// {
-//   char *lvl = getenv ("LOG_LEVEL");
-//   // clang-format off
-//     if (lvl)
-// #ifdef __EXCEPTIONS
-//       try { return std::stoi (lvl); }
-//       catch (std::invalid_argument &) {}
-// #else
-//       return atoi(lvl);
-// #endif
-//   // clang-format on
-//   return Level::INFO;
-// }
-
-/**
- * @brief The level of a specific Log message.
- *
- * The level should always have exactly one set bit.
- *
- * This enum will be used implicitly by the level-named
- * functions e.g. error, debug, etc.
- *
- */
-// clang-format off
-// enum MsgLevel : l4_uint8_t
-// {
-//   DEBUG = 0b10000,
-//   INFO  = 0b01000,
-//   WARN  = 0b00100,
-//   ERROR = 0b00010,
-//   FATAL = 0b00001,
-// };
-// clang-format on
-
 // clang-format off
 struct DEBUG { static constexpr const char *name = "\033[34;1mDEBUG\033[0m"; };
 struct INFO  { static constexpr const char *name = "\033[36;1mINFO \033[0m"; };
@@ -149,6 +103,11 @@ struct ERROR { static constexpr const char *name = "\033[31;1mERROR\033[0m"; };
 struct FATAL { static constexpr const char *name = "\033[35;1mFATAL\033[0m"; };
 // clang-format on
 
+/**
+ * @brief Synchronizer that synchronizes nothing
+ *
+ * Just ignore the start and end
+ */
 struct NoSync
 {
   void
@@ -161,9 +120,21 @@ struct NoSync
   }
 };
 
-template <const char *sem_cap_name> struct SemaphoreSync
+//TODO somehow pass cap_name as template param
+
+/**
+ * @brief Synchronization on a shared semaphore
+ *
+ * In oder for this to work, the processes that want to synchronize their
+ * messages need to share a semaphore under a common name. This needs to be
+ * setup in advance, which can be established with ned for example.
+ *
+ * Note: the semaphore needs to be initialized with '1'.
+ */
+struct SemaphoreSync
 {
-  L4::Cap<L4::Semaphore> sema = Env::env () -> get_cap<L4::Semaphore> (sem_cap_name);
+  L4::Cap<L4::Semaphore> sema
+      = Env::env ()->get_cap<L4::Semaphore> ("log_sync");
   l4_umword_t store;
 
   void
@@ -182,83 +153,132 @@ template <const char *sem_cap_name> struct SemaphoreSync
   }
 };
 
-template <typename Severity> struct NoSilence
+/**
+ * @brief Silencer that will silence nothing
+ *
+ * Ignore the environment, just print every message
+ */
+struct NoSilence
 {
   static constexpr bool
   silence ()
   {
     return false;
   };
-};
 
-struct VerboseFormat
-{
-  static constexpr const char *format = "\033[2m{thread_id:>10} {time:%T}\033[0m {severity:s} {pkgname:s} \033[2m<{file:s}:{line:d}> {function:s}\033[0m {msg:s}\n";
-};
+  static void setLevel (int /* log_level */){};
 
-struct CleanFormat
-{
-  static constexpr const char *format = "\033[2m{time:%S}\033[0m {severity:s} {pkgname:s} {msg:s}\n";
-};
-
-
-/**
- * A class to pass a format string while capturing the source location of the
- * invocation
- *
- * This workaround is necessary since it is not possible to pass the location
- * as default arguments while allowing a variable number of arguments for the
- * printing
- */
-class Format
-{
-public:
-  const char *format;
-  const char *file;
-  const char *function;
-  const int line;
-
-  Format (const char *format, const char *file = __builtin_FILE (),
-          const char *function = __builtin_FUNCTION (),
-          const int line = __builtin_LINE ())
-      : format (format), file (file), function (function), line (line)
+  static int
+  getLevel ()
   {
+    return ~0;
+  };
+};
+
+
+// TODO somehow pass "LOG_LEVEL" as template param?
+/**
+ * @brief Use an environment env to decide which msg to silence
+ *
+ * The content of the env var "LOG_LEVEL" will be used
+ */
+struct SilenceByEnv
+{
+  template <typename Severity>
+  static bool
+  silence ()
+  {
+    return not(getLevel () & severity_to_mask<Severity> ());
+  };
+
+  static void
+  setLevel (int log_level)
+  {
+    setenv ("LOG_LEVEL", std::to_string (log_level).c_str (), true);
+  };
+
+  static int
+  getLevel ()
+  {
+    return atoi (getenv ("LOG_LEVEL") ?: "0");
+  };
+
+  template <typename Severity>
+  static constexpr int
+  severity_to_mask ()
+  {
+    return 0b0;
   }
 };
 
+// clang-format off
+template <> constexpr int SilenceByEnv::severity_to_mask<DEBUG>() { return 0b10000; }
+template <> constexpr int SilenceByEnv::severity_to_mask<INFO >() { return 0b01000; }
+template <> constexpr int SilenceByEnv::severity_to_mask<WARN >() { return 0b00100; }
+template <> constexpr int SilenceByEnv::severity_to_mask<ERROR>() { return 0b00010; }
+template <> constexpr int SilenceByEnv::severity_to_mask<FATAL>() { return 0b00001; }
+// clang-format on
+
 /**
- * @brief Generalized print method
+ * @brief More verbose format
+ *
+ * This format also includes thread_id, file name, function name and line.
+ * Compared to CleanFormat.
+ */
+struct VerboseFormat
+{
+  static constexpr const char *format
+      = "\033[2m{thread_id:>10} {time:%T}\033[0m {severity:s} {pkgname:s} "
+        "\033[2m<{file:s}:{line:d}> {function:s}\033[0m {msg:s}\n";
+};
+
+/**
+ * @brief Simple format as good default
+ *
+ * A format that includes the current time, message severity, pkgname and
+ * message
+ */
+struct CleanFormat
+{
+  static constexpr const char *format
+      = "\033[2m{time:%S}\033[0m {severity:s} {pkgname:s} {msg:s}\n";
+};
+
+/**
+ * @brief main logging method
  *
  * This method will do the actual printing.
  * Note: This method will print a line break per default!
  *
- * @param msg_lvl   The level of the message.
- * @param file      The file of the caller. Generated with __builtin_FILE
- * @param function  The function name of the caller. Generated with
- *                  __builtin_FUNCTION
- * @param line      The line index of the caller. Generated with
- *                  __builtin_LINE
- * @param fmt       A format string.
- * @param args      The arguments for the format string.
+ * @param format  Format string + source location (auto converted from
+ *                string)
+ * @param args    The arguments for the format string.
+ *
+ * @tparam Severity        Log level of the message
+ * @tparam Silencer        Decides which message will be printed
+ * @tparam Synchronizer    Can be used to sync messages of multiple processes
+ * @tparam FormatSpecifier The format of the printed messages
  */
-template <typename Severity,
-          template <typename> typename Silencer = NoSilence,
-          typename Synchronizer = NoSync, 
-          typename FormatSpecifier = CleanFormat,
-          typename... Args>
+template <typename Severity, typename Silencer = SilenceByEnv, // TODO NoSilence as default?
+          typename Synchronizer = SemaphoreSync, // TODO NoSync as default?
+          typename FormatSpecifier = CleanFormat, typename... Args>
 inline static void
-log (Format format, Args &&...args)
+log (ArgWithLocation<const char *> format, Args &&...args)
 {
+#ifndef NDEBUG
+  /* log becomes a noop when debugging is disabled */
+
   /* check if message should be silenced */
-  if (Silencer<Severity>::silence ())
+  if (Silencer::template silence<Severity> ())
     return;
 
-  auto now = std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now ());
+  auto now = std::chrono::time_point_cast<std::chrono::microseconds> (
+      std::chrono::high_resolution_clock::now ());
   auto t_id = std::this_thread::get_id ();
 
   // necessary for the ""_a literals for named format args
   using namespace fmt::literals;
-  
+
   // clang-format off
   std::string out_string = fmt::format (
       FormatSpecifier::format,
@@ -269,15 +289,17 @@ log (Format format, Args &&...args)
       "file"_a = format.file + std::string (format.file).find_last_of('/') + 1,
       "line"_a = format.line,
       "function"_a = format.function,
-      "msg"_a = fmt::format(format.format, args...));
+      "msg"_a = fmt::format(format.argument, args...));
   // clang-format on
   // TODO use strrchr instead of find last
 
   /**
    * Call print only once with the whole string.
    *
-   * This will at least try to print string with a single ipc call to prevent
+   * This will at least try to print strings with a single ipc call to prevent
    * multiple concurrently running threads from interleaving their messages.
+   *
+   * TODO they are interleaved in the middle of chars anyway .. why?
    */
   Synchronizer sync;
   sync.start ();
@@ -285,8 +307,30 @@ log (Format format, Args &&...args)
   L4Re::Env::env ()->log ()->print (out_string.c_str ());
 
   sync.end ();
-};
 
+#endif
 }
 
+/**
+ * @brief Get the output log level
+ */
+template <typename Silencer = SilenceByEnv>
+inline static int
+getLevel ()
+{
+  return Silencer::getLevel ();
 }
+
+/**
+ * @brief Set the output level of the log
+ */
+template <typename Silencer = SilenceByEnv>
+inline static void
+setLevel (int log_level)
+{
+  Silencer::setLevel (log_level);
+}
+
+} // namespace LibLog
+
+} // namespace L4Re

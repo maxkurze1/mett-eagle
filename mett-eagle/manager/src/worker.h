@@ -51,11 +51,10 @@ private:
 
 public:
   explicit Worker (Const_dataspace bin,
-                   L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
-                   L4::Cap<L4::Scheduler> const &scheduler
-                   = L4Re::Env::env ()->scheduler (),
-                   L4::Cap<L4::Factory> const &alloc
-                   = L4Re::Env::env ()->user_factory ())
+                   L4Re::Util::Shared_cap<L4Re::Parent> const &parent, // TODO maybe better just cap?
+                   L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
+                   L4Re::Util::Shared_cap<L4::Factory> const &alloc)
+                  //  = L4Re::Env::env ()->user_factory ())
       : Remote_app_model (parent, scheduler, alloc), _bin (bin)
   {
   }
@@ -76,6 +75,20 @@ public:
   }
 
   /**
+   * @brief Terminate with exit code
+   * 
+   * All capabilities should be unmapped
+   * 
+   * Note: This method should only be invoked on failure
+   */
+  void
+  exit (int exit_code)
+  {
+    // TODO free resources
+    _alive = false;
+  }
+
+  /**
    * @brief Get the exit value
    */
   std::string
@@ -92,17 +105,6 @@ public:
   {
     return _alive;
   }
-
-  /**
-   * Region mapper fabric??
-   */
-  // L4Re::Util::Ref_cap<L4::Factory>::Cap _rm_fab;
-
-  // L4Re::Util::Ref_cap<L4::Factory>::Cap
-  // rm_fab () const
-  // {
-  //   return _rm_fab;
-  // }
 
   // void
   // Worker::terminate ()
@@ -291,7 +293,7 @@ public:
     if (not L4Re::Env::Cap_entry::is_valid_name (name.c_str ()))
       {
         using namespace L4Re::LibLog;
-        log<ERROR> ("Capability name '{}' too long", name);
+        log<ERROR> ("Capability name '{}' too long -- ignored", name);
         return;
       }
     _initial_capabilities.push_back ({cap, name, rights, flags});

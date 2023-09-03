@@ -11,6 +11,7 @@ entry mett-eagle
     module mett-eagle
     module mett-eagle-client
 
+entry ignore
     module python-faas
     module libstdc++.so
     module libld-l4.so

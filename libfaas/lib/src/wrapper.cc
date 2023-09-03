@@ -32,7 +32,7 @@ try
     /* there has to be exactly one argument -- the string passed */
     if (L4_UNLIKELY (argc != 1))
       throw Loggable_exception (
-          -L4_EINVAL, fmt::format("Wrong number of arguments. Expected 1 got {:d}", argc));
+          -L4_EINVAL, "Wrong number of arguments. Expected 1 got {:d}", argc);
 
     /* actual call to the faas function */
     std::string ret{ Main (argv[0]) };

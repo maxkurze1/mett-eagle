@@ -21,12 +21,14 @@
 #include <cstdlib>
 #include <l4/cxx/exceptions>
 #include <string>
+#include <utility>
 
 #include <l4/fmt/core.h>
 
+#include <l4/liblog/arg_with_location>
+
 namespace L4Re
 {
-
 namespace LibLog
 {
 
@@ -68,30 +70,24 @@ class Loggable_exception : public L4::Base_exception
 {
 protected:
   std::string _msg;
-  const long _errno;
-  const char *_file = NULL;
-  const char *_func = NULL;
-  const int _line = -1;
+  ArgWithLocation<const long> _errno;
 
 public:
   /**
-   * Create a loggable exception from a format string.
+   * Create a loggable exception from a format string with arguments
    */
-  explicit inline Loggable_exception (
-      long err_no, std::string msg = {},
-      char const *const file = __builtin_FILE (),
-      char const *const func = __builtin_FUNCTION (),
-      const int line = __builtin_LINE ()) noexcept : _msg (msg),
-                                                     _errno (err_no),
-                                                     _file (file),
-                                                     _func (func),
-                                                     _line (line)
+  template <typename... Args>
+  explicit inline Loggable_exception (ArgWithLocation<const long> err_no,
+                                      std::string msg = {}, Args &&...args) noexcept
+      : _msg (fmt::format(msg, args...)),
+        _errno (std::move(err_no) )
   {
   }
+
   inline char const *
   str () const noexcept override
   {
-    return l4sys_errtostr (_errno);
+    return l4sys_errtostr (_errno.argument);
   }
 
   /**
@@ -109,7 +105,7 @@ public:
   inline long
   err_no () const noexcept
   {
-    return _errno;
+    return _errno.argument;
   }
 
   /**
@@ -118,7 +114,7 @@ public:
   inline char const *
   file () const noexcept
   {
-    return _file;
+    return _errno.file;
   }
 
   /**
@@ -127,7 +123,7 @@ public:
   inline char const *
   function () const noexcept
   {
-    return _func;
+    return _errno.function;
   }
 
   /**
@@ -136,17 +132,16 @@ public:
   inline int
   line () const noexcept
   {
-    return _line;
+    return _errno.line;
   }
 };
 
 } // ns LibLog
-
 } // ns L4Re
 
 /**
  * @brief Custom formatter for Loggable_exceptions
- * 
+ *
  * \see https://fmt.dev/latest/api.html#formatting-user-defined-types
  */
 template <> struct fmt::formatter<L4Re::LibLog::Loggable_exception>
@@ -166,7 +161,7 @@ template <> struct fmt::formatter<L4Re::LibLog::Loggable_exception>
 
 /**
  * @brief Custom formatter for L4::Base_exception
- * 
+ *
  * \see https://fmt.dev/latest/api.html#formatting-user-defined-types
  */
 template <> struct fmt::formatter<L4::Base_exception>
@@ -186,7 +181,7 @@ template <> struct fmt::formatter<L4::Base_exception>
 
 /**
  * @brief Custom formatter for L4::Runtime_error
- * 
+ *
  * \see https://fmt.dev/latest/api.html#formatting-user-defined-types
  */
 template <> struct fmt::formatter<L4::Runtime_error>

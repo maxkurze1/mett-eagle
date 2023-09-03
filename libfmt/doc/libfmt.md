@@ -45,5 +45,5 @@ This can also be used to throw exceptions with more specific error messages.
 
 int x = 9;
 
-throw L4Re::LibLog::Loggable_exception(-L4_EINVAL, fmt::format("The value of x is {}", x));
+throw L4Re::LibLog::Loggable_exception(-L4_EINVAL, "The value of x is {}", x);
 ```

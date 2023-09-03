@@ -27,7 +27,6 @@
 
 namespace L4Re
 {
-
 namespace LibLog
 {
 
@@ -183,6 +182,5 @@ chkipc (l4_msgtag_t tag, char const *extra = "", l4_utcb_t *utcb = l4_utcb ())
 
 #endif // ifdef __EXCEPTIONS
 
-} // ns LibLog
-
-} // ns L4Re
+} // namespace LibLog
+} // namespace L4Re
