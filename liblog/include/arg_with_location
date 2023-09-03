@@ -1,0 +1,53 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the LICENSE.md file for details.
+ */
+/**
+ * @file
+ * Utility class for capturing source location together with an arbitrary argument.
+ *
+ * @headerfile {l4/liblog/log}
+ */
+
+#pragma once
+
+#include <utility>
+
+namespace L4Re
+{
+namespace LibLog
+{
+
+/**
+ * A class to pass an argument while capturing the source location of the
+ * invocation
+ *
+ * This workaround is necessary since it is not possible to pass the location
+ * as default arguments while allowing a variable number of arguments for a printf 
+ * like function
+ */
+template <typename ArgType>
+class ArgWithLocation
+{
+public:
+  ArgType argument;
+
+  const char *file;
+  const char *function;
+  const int line;
+
+  ArgWithLocation (ArgType argument, const char *file = __builtin_FILE (),
+          const char *function = __builtin_FUNCTION (),
+          const int line = __builtin_LINE ())
+      : argument (std::move(argument)), file (file), function (function), line (line)
+  {
+  }
+};
+
+} // namespace LibLog
+} // namespace L4Re

@@ -16,13 +16,16 @@
 #include <l4/libloader/remote_app_model>
 #include <l4/liblog/log>
 #include <l4/re/util/debug>
+#include <l4/re/util/shared_cap>
+#include <l4/re/util/unique_cap>
+
+#include <l4/liblog/loggable-exception>
 
 /**
- * @brief This call will provide all functions that are needed but not
+ * @brief This class will provide all functions that are needed but not
  * implemented by Base_app_model/Loader and Remote_app_model
  */
 struct App_model : public Ldr::Base_app_model<Stack>
-// L4Re::Util::Env_ns env_ns;
 {
 
   enum // TODO
@@ -35,33 +38,29 @@ struct App_model : public Ldr::Base_app_model<Stack>
   };
 
   // necessary for Base_app_model
-  // typedef L4Re::Util::Ref_del_cap<L4Re::Dataspace>::Cap Const_dataspace;
-  // typedef L4Re::Util::Ref_del_cap<L4Re::Dataspace>::Cap Dataspace; // TODO
-  // typedef L4Re::Util::Ref_cap<L4Re::Rm>::Cap Rm;                   // TODO
-  /*
-   * TODO use Ref_cap
+  /**
+   * the passed binary of the client will be handled as Const_dataspace
+   * therefore Const_dataspace's should not be deleted
    */
-  typedef L4::Cap<L4Re::Dataspace> Const_dataspace;
-  typedef L4::Cap<L4Re::Dataspace> Dataspace;
-  typedef L4::Cap<L4Re::Rm> Rm;
+  typedef L4Re::Util::Shared_cap<L4Re::Dataspace> Const_dataspace;
+  typedef Stack_base::Dataspace Dataspace;
 
-  L4::Cap<L4::Task> _task;
-  L4::Cap<L4::Thread> _thread;
-  L4::Cap<L4Re::Rm> _rm;
+  L4Re::Util::Unique_cap<L4::Task> _task;
+  L4Re::Util::Unique_cap<L4::Thread> _thread;
+  L4Re::Util::Unique_cap<L4Re::Rm> _rm;
 
-  explicit App_model (L4Re::Util::Ref_del_cap<L4Re::Parent>::Cap const &parent,
-                      L4::Cap<L4::Scheduler> const &scheduler
-                      = L4Re::Env::env ()->scheduler (),
-                      L4::Cap<L4::Factory> const &alloc
-                      = L4Re::Env::env ()->user_factory ());
+  explicit App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
+                      L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
+                      L4Re::Util::Shared_cap<L4::Factory> const &alloc);
 
   Dataspace alloc_ds (unsigned long size) const;
 
-  /* this function is not used -- all binarys are passed as Const_dataspace */
+  /* this function is not used -- all binaries are passed as Const_dataspace */
   Const_dataspace
   open_file (char const *)
   {
-    return L4::Cap<L4Re::Dataspace>::Invalid;
+    throw L4Re::LibLog::Loggable_exception (-L4_EINVAL,
+                                            "open_file is not implemented");
   }
 
   /* needed by Remote_app_model */
@@ -117,18 +116,16 @@ struct App_model : public Ldr::Base_app_model<Stack>
   local_kip_ds ()
   {
     extern l4re_aux_t *l4re_aux;
-    return L4::Cap<L4Re::Dataspace> (l4re_aux->kip_ds);
+    // works because kip_ds is not managed by the Util::cap_alloc and therefore
+    // the ref count is not decreased -- Shared_cap is doing nothing here
+    return Dataspace (L4::Cap<L4Re::Dataspace> (l4re_aux->kip_ds));
   }
 
   static L4::Cap<void>
   local_kip_cap ()
   {
-    return local_kip_ds () /* .get () */;
+    return local_kip_ds ().get ();
   }
-#if 0
-  static L4::Cap<void> prog_kip_ds()
-  { return L4::Cap<void>(Kip_cap << L4_CAP_SHIFT); }
-#endif
 
   void get_task_caps (L4::Cap<L4::Factory> *factory, L4::Cap<L4::Task> *task,
                       L4::Cap<L4::Thread> *thread);
@@ -136,22 +133,20 @@ struct App_model : public Ldr::Base_app_model<Stack>
   l4_msgtag_t
   run_thread (L4::Cap<L4::Thread> thread, l4_sched_param_t const &)
   {
-    L4::Cap<L4::Scheduler> scheduler (prog_info ()->scheduler.raw
-                                      & (~0UL << L4_FPAGE_ADDR_SHIFT));
+    auto scheduler = L4::Cap<L4::Scheduler> (prog_info ()->scheduler.raw
+                                             & (~0UL << L4_FPAGE_ADDR_SHIFT));
 
-    // test whether intersection between provided cpu set and online cpu set
-    // is empty, in that case warn that the thread _may_ never run
     l4_umword_t cpu_max;
     l4_sched_cpu_set_t cpus = l4_sched_cpu_set (0, 0);
     l4_msgtag_t t = scheduler->info (&cpu_max, &cpus);
-    if (l4_error (t))
+    if (L4_UNLIKELY(l4_error (t)))
       return t;
 
     l4_sched_param_t sp = l4_sched_param (L4_SCHED_MIN_PRIO);
     sp.affinity = cpus;
 
     using namespace L4Re::LibLog;
-    log<DEBUG> ("Scheduling on cpu {:x}", cpus.map);
+    log<DEBUG> ("Scheduling on cpu {:#x}", cpus.map);
 
     return scheduler->run_thread (thread, sp);
   }
@@ -159,8 +154,5 @@ struct App_model : public Ldr::Base_app_model<Stack>
   virtual void push_argv_strings () = 0;
   virtual void push_env_strings () = 0;
 
-  /* what is a Namespace?? */
-  // L4::Cap<L4Re::Namespace> _ns;
-
-  virtual ~App_model () noexcept {}
+  virtual ~App_model () noexcept{};
 };

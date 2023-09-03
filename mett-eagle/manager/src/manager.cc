@@ -49,19 +49,29 @@ protected:
    *
    * This map will hold all registered actions of a client and also provide
    * them to the workers started by this specific client only.
+   *
+   * It is implemented as a shared_ptr since it will be referenced by client
+   * epifaces and worker epifaces
    */
-  std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > > _actions;
+  std::shared_ptr<
+      std::map<std::string, L4Re::Util::Shared_cap<L4Re::Dataspace> > >
+      _actions;
 
   /**
    * @brief The client specific thread that will execute all actions
+   *
+   * This cap is not shared ... the deallocation of the thread capability will
+   * be left for pthreads
    */
   L4::Cap<L4::Thread> _thread;
 
   /**
    * @brief The Scheduler object that is used by the thread and worker
    * processes
+   *
+   * shared by client epifaces and worker epifaces
    */
-  L4::Cap<L4::Scheduler> _scheduler;
+  L4Re::Util::Shared_cap<L4::Scheduler> _scheduler;
 
 public:
   long op_action_invoke (MettEagle::Manager_Base::Rights,
@@ -75,21 +85,17 @@ struct Manager_Client_Epiface
     : L4::Epiface_t<Manager_Client_Epiface, MettEagle::Manager_Client,
                     Manager_Base_Epiface>
 {
-protected:
-  l4_umword_t _cpu_bitmap;
-
 public:
   Manager_Client_Epiface (L4::Cap<L4::Thread> thread,
-                          L4::Cap<L4::Scheduler> scheduler,
-                          l4_umword_t cpu_bitmap)
+                          L4Re::Util::Shared_cap<L4::Scheduler> scheduler)
   {
     /* _actions map will be create by the clients epiface and only *
      * passed to each worker epiface.                              */
     _actions = std::make_shared<
-        std::map<std::string, L4::Cap<L4Re::Dataspace> > > ();
+        std::map<std::string, L4Re::Util::Shared_cap<L4Re::Dataspace> > > ();
+
     _thread = thread;
     _scheduler = scheduler;
-    _cpu_bitmap = cpu_bitmap;
   }
 
   long
@@ -98,19 +104,21 @@ public:
                     L4::Ipc::Snd_fpage file)
   {
     const char *name = _name.data;
-    log<DEBUG> ("Create action name='{:s}' file passed='{}'",
-                             name, file.cap_received ());
+    log<DEBUG> ("Create action name='{:s}' file passed='{}'", name,
+                file.cap_received ());
+
     if (L4_UNLIKELY (not file.cap_received ()))
       throw Loggable_exception (-L4_EINVAL, "No dataspace cap received");
     auto cap = server_iface ()->rcv_cap<L4Re::Dataspace> (0);
+
     if (L4_UNLIKELY (not cap.validate ().label ()))
       throw Loggable_exception (-L4_EINVAL, "Received capability is invalid");
     if (L4_UNLIKELY (_actions->count (name) != 0))
-      throw Loggable_exception (
-          -L4_EEXIST, fmt::format ("Action '{:s}' already exists", name));
+      throw Loggable_exception (-L4_EEXIST, "Action '{:s}' already exists",
+                                name);
 
-    /* get the received capability */
-    (*_actions)[name] = cap;
+    /* safe the received capability */
+    (*_actions)[name] = L4Re::Util::Shared_cap<L4Re::Dataspace> (cap);
     if (L4_UNLIKELY (server_iface ()->realloc_rcv_cap (0) < 0))
       throw Loggable_exception (-L4_ENOMEM, "Failed to realloc_rcv_cap");
 
@@ -131,15 +139,17 @@ public:
   /* though it will still be measured before the elf launcher starts */
   std::chrono::time_point<std::chrono::high_resolution_clock> start;
 
-  /* start will be measured as short as possible after worker exit */
+  /* end will be measured as short as possible after worker exit */
   /* this will be measured in the corresponding rpc handler */
   std::chrono::time_point<std::chrono::high_resolution_clock> end;
 
 public:
   Manager_Worker_Epiface (
-      std::shared_ptr<std::map<std::string, L4::Cap<L4Re::Dataspace> > >
+      std::shared_ptr<
+          std::map<std::string, L4Re::Util::Shared_cap<L4Re::Dataspace> > >
           actions,
-      L4::Cap<L4::Thread> thread, L4::Cap<L4::Scheduler> scheduler,
+      L4::Cap<L4::Thread> thread,
+      L4Re::Util::Shared_cap<L4::Scheduler> scheduler,
       std::shared_ptr<Worker> worker)
   {
     /* passed actions map from the client */
@@ -171,18 +181,25 @@ public:
         this->end = std::chrono::high_resolution_clock::now ();
 
         auto err = static_cast<int> (val);
-        /* faas function probably threw an error   *
-         * in this case value holds the error code */
-        log<ERROR> (
-            "Worker finished with wrong exit! - {:s} (=exit: {:d})",
-            l4sys_errtostr (err), err);
+
+        /*
+         * faas function probably threw an error, else op_exit should have been
+         * called.
+         * in case of an error, value holds the error code
+         */
+        log<ERROR> ("Worker finished with wrong exit! - {:s} (=exit: {:d})",
+                    l4sys_errtostr (err), err);
+
         // TODO return error to parent
         // TODO maybe better to delete cap??
-        _worker->exit ("");
-        L4Re::Env::env ()->task ()->release_cap (obj_cap ());
-        // terminate ();
 
-        // delete this;
+        /* using exit(int) to indicate unusual exit */
+        _worker->exit (err);
+        L4Re::Env::env ()->task ()->release_cap (
+            obj_cap ()); // TODO check again
+        // TODO terminate ();
+
+        // TODO delete this;
 
         /* do not send answer -- child shouldn't exist anymore */
         return -L4_ENOREPLY;
@@ -200,10 +217,10 @@ public:
     const char *value = _value.data;
 
     log<DEBUG> ("Worker exit: {:s}", value);
-    // terminate ();
+    // TODO terminate ();
     _worker->exit (value);
     L4Re::Env::env ()->task ()->release_cap (obj_cap ());
-    //     delete this;
+    // TODO delete this;
 
     /* With -L4_ENOREPLY no answer will be send to the worker. Thus the worker
      * will keep waiting. */
@@ -224,13 +241,11 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   log<DEBUG> ("Invoke action name='{:s}'", name);
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name) == 0))
-    throw Loggable_exception (-L4_EINVAL,
-                              fmt::format ("Action '{}' doesn't exist", name));
+    throw Loggable_exception (-L4_EINVAL, "Action '{}' doesn't exist", name);
 
-  /* cap can be unmapped anytime ... TODO add try catch or some error
-   * handling
-   */
-  L4::Cap<L4Re::Dataspace> file = (*_actions)[name];
+  /* cap can be unmapped anytime ... maybe we should create a local copy on
+   * action create?? ... TODO add try catch or some error handling */
+  auto file = (*_actions)[name];
   if (L4_UNLIKELY (not file.validate ().label ()))
     throw Loggable_exception (-L4_EINVAL, "dataspace invalid");
 
@@ -247,38 +262,58 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
      * To prevent the corruption of returned values the cap should be deleted
      * before they are set.
      */
-    auto cap = L4Re::chkcap (
-        L4Re::Util::make_ref_del_cap<MettEagle::Manager_Worker> (),
-        "Failed to alloc cap", -L4_ENOMEM);
+
+    auto parent_ipc_cap = L4Re::chkcap (
+        L4Re::Util::make_shared_cap<MettEagle::Manager_Worker> (),
+        "alloc parent cap", -L4_ENOMEM);
+
     /* Pass the IPC gate cap to process as parent */
-    L4::Cap<L4::Factory> allocator;
+    /* only necessary to ensure the limited allocator is freed at the end of
+     * the scope */
+    L4Re::Util::Shared_cap<L4::Factory> allocator;
+    // L4Re::Util::Unique_cap<L4::Factory> limited_alloc;
     if (cfg.memory_limit == 0)
       {
-        allocator = L4Re::Env::env ()->user_factory ();
+        /* default to own user factory == 'unlimited' memory */
+        /* user_factory wont be unmapped by the Shared_cap since it is not
+         * managed by the Util::cap_alloc */
+        allocator = L4Re::Util::Shared_cap<L4::Factory> (
+            L4Re::Env::env ()->user_factory ());
       }
     else
       {
-        allocator = L4Re::Util::cap_alloc.alloc<L4::Factory> ();
+        /* create limited allocator if limit is specified */
+        allocator = L4Re::Util::make_shared_cap<L4::Factory> ();
         L4Re::chksys (
-            l4_msgtag_t (L4Re::Env::env ()->user_factory ()->create (allocator)
-                         << cfg.memory_limit),
+            l4_msgtag_t (
+                L4Re::Env::env ()->user_factory ()->create (allocator.get ())
+                << cfg.memory_limit),
             "create limited allocator");
       }
-    auto worker = std::make_shared<Worker> (file, cap, _scheduler, allocator);
+
+    L4Re::Util::cap_alloc.take (parent_ipc_cap.get ());
+    auto worker = std::make_shared<Worker> (
+        file,
+        L4Re::Util::Shared_cap<L4Re::Parent> (
+            L4::cap_cast<L4Re::Parent> (parent_ipc_cap.get ())),
+        _scheduler, allocator);
     /* create the ipc handler for started process */
     auto worker_epiface = std::make_unique<Manager_Worker_Epiface> (
         _actions, _thread, _scheduler, worker);
     /* link capability to ipc gate */
-    L4Re::LibLog::chksys (
-        L4Re::Env::env ()->factory ()->create_gate (
-            cap.get (), _thread, l4_umword_t (worker_epiface.get ())),
-        "Failed to create gate");
-    worker_epiface->set_server (new L4::Ipc_svr::Default_loop_hooks (),
-                                cap.get ());
+    L4Re::LibLog::chksys (L4Re::Env::env ()->factory ()->create_gate (
+                              parent_ipc_cap.get (), _thread,
+                              l4_umword_t (worker_epiface.get ())),
+                          "Failed to create gate");
+    auto worker_server = std::make_unique<L4::Ipc_svr::Default_loop_hooks> ();
+    worker_epiface->set_server (worker_server.get (), parent_ipc_cap.get ());
 
     /* start worker */
+    /* pass data as first argument string */
     worker->set_argv_strings ({ arg.data });
     worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=DEBUG" });
+    /* pass semaphore to sync log messages -- TODO can be removed for final
+     * benchmarking */
     worker->add_initial_capability (
         L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync"), "log_sync",
         L4_CAP_FPAGE_RWSD);
@@ -289,17 +324,23 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
      */
     worker_epiface->start = std::chrono::high_resolution_clock::now ();
 
+    log<DEBUG> ("launching");
+
     worker->launch ();
 
     /**
-     * ========================= Server loop =========================
+     * ========================== Server loop ==========================
+     *
      * The following code implements a simple server loop. This loop has
      * no demand allocation (-> can't receive capabilities) and will only
      * dispatch to a single Epiface object.
      * Nonetheless this loop is necessary to receive from and reply to a
      * specific capability. In order to keep the reply capability of the
-     * client.
+     * client unchanged.
      */
+
+    // TODO maybe add some timeout or heartbeat interval to prevent malicious
+    // clients
     l4_msgtag_t msg = L4Re::chkipc (
         l4_ipc_receive (worker->_thread.cap (), l4_utcb (), L4_IPC_NEVER),
         "Worker ipc failed.");
@@ -311,15 +352,17 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
             msg, 0 /* rights dont matter */, l4_utcb ());
         /* Note: be careful can't invoke any ipc between dispatch and ipc_call
          * (do not modify utcb) */
-        /* the exit handler will exit the worker */
+
+        /* the exit handler (invoked by the dispatch) will exit the worker */
         if (not worker->alive ())
           break;
         /* no exit received -> wait for next RPC */
         msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
-                           L4_IPC_NEVER);
+                           L4_IPC_NEVER); /* use compound send and receive */
       }
+    // TODO handle error exit
     exit_value = worker->get_exit_value ();
-    /* check if utcb buffer is large enough */
+    /* check if utcb buffer is large enough -- TODO is this necessary?*/
     if (L4_UNLIKELY (exit_value.length () >= ret.length))
       throw Loggable_exception (-L4_EMSGTOOLONG,
                                 "The utcb buffer is too small!");
@@ -370,8 +413,6 @@ struct Manager_Registry_Epiface
       L4::Ipc::Cap<MettEagle::Manager_Client> &manager_ipc_gate)
   {
     log<DEBUG> ("Registering client");
-
-    // TODO cap alloc is not thread safe
 
     /**
      * This function will create a new thread (just like pthreads) that is
@@ -448,7 +489,7 @@ struct Manager_Registry_Epiface
 #endif
 
     /** scheduler with only one selected cpu enabled for the new thread */
-    auto sched_cap = L4Re::Util::cap_alloc.alloc<L4::Scheduler> ();
+    auto sched_cap = L4Re::Util::make_shared_cap<L4::Scheduler> ();
     l4_mword_t limit = L4_SCHED_MAX_PRIO;
     l4_mword_t offset = L4_SCHED_MIN_PRIO;
 
@@ -458,12 +499,12 @@ struct Manager_Registry_Epiface
      * client.
      */
     l4_umword_t bitmap = select_client_cpu ();
-    log<DEBUG> ("Selected cpu {:b}", bitmap);
+    log<DEBUG> ("Selected cpu {:#b}", bitmap);
 
     L4Re::chksys (
         l4_msgtag_t (
             L4Re::Env::env ()->user_factory ()->create<L4::Scheduler> (
-                sched_cap)
+                sched_cap.get ())
             << limit << offset << bitmap),
         "Failed to create scheduler");
 
@@ -519,19 +560,20 @@ struct Manager_Registry_Epiface
         client_server_pointer);
     if (failed)
       {
+        // TODO probably better throw
         log<ERROR> ("failed to create thread");
       }
+    auto thread_cap = L4::Cap<L4::Thread> (pthread_l4_cap (pthread));
 
     pthread_attr_destroy (&attr);
 
     client_server
         = new L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> (
-            L4::Cap<L4::Thread> (pthread_l4_cap (pthread)),
-            L4Re::Env::env ()->factory ());
+            thread_cap, L4Re::Env::env ()->factory ());
     /* create new object handling the requests of this client */
     /* TODO handle deallocation */
-    auto epiface = new Manager_Client_Epiface (
-        L4::Cap<L4::Thread> (pthread_l4_cap (pthread)), sched_cap, bitmap);
+    auto epiface = new Manager_Client_Epiface (thread_cap, sched_cap);
+    
     /* register the object in the server loop. This will create the        *
      * capability for the object and inform the server to route IPC there. */
     L4::Cap<void> cap = client_server->registry ()->register_obj (epiface);
@@ -544,19 +586,16 @@ struct Manager_Registry_Epiface
         auto canceled = pthread_cancel (pthread) == 0;
         throw Loggable_exception (
             -L4_ENOMEM,
-            fmt::format (
-                "Failed to register client IPC gate, thread_canceled={}",
-                canceled));
+            "Failed to register client IPC gate, thread_canceled={}",
+            canceled);
       }
 
     /*
      * start the thread and wait until the pointer to 'client_server' was
      * copied into it before leaving the function and discarding the stack
      */
-    L4::Cap<L4::Thread> thread{ pthread_l4_cap (pthread) };
-    // TODO check if affinity is used even if bitmap only contains one bit
     L4Re::chksys (sched_cap->run_thread (
-        thread, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
+        thread_cap, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
     manager_ipc_gate = L4::Cap<MettEagle::Manager_Client> ();
 
     /*
@@ -610,7 +649,7 @@ try
           l4re_aux = (l4re_aux_t *)auxp[1];
         auxp += 2;
       }
-
+    
     /**
      * Query available cpu-set which can be distributed to clients
      */
@@ -622,9 +661,8 @@ try
     /* update global bitmap */
     available_cpus = cpus.map;
 
-    log<INFO> (
-        "Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
-                     cpus.map, cpu_max, available_cpus.count (), cpu_max);
+    log<INFO> ("Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
+               cpus.map, cpu_max, available_cpus.count (), cpu_max);
 
     /*
      * Associate the 'server' endpoint that was already

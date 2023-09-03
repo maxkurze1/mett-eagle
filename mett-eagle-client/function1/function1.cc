@@ -19,7 +19,7 @@ Main (std::string args)
 
   log<INFO> ("Hello from function1, param: {}", args);
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
   // std::string ans = L4Re::Faas::invoke("test_idk");
 
   // int size = 0;
@@ -28,7 +28,7 @@ Main (std::string args)
   //   memset(some_mem, 0xFF, chunk_size);
   //   mem.push_back(some_mem); // keep reference
   //   size += chunk_size;
-  //   log<INFO>(fmt::format("Malloced {}", size));
+  //   log<INFO>("Malloced {}", size);
   // }
   auto end = std::chrono::high_resolution_clock::now ();
 

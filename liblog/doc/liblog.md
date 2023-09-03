@@ -125,7 +125,7 @@ try
   {
     int bad_value = -1;
     if (bad_value < 0)
-      throw Loggable_exception (-L4_EINVAL, fmt::format("Value shouldn't be less than 0 (value={:d})", bad_value));
+      throw Loggable_exception (-L4_EINVAL, "Value shouldn't be less than 0 (value={:d})", bad_value);
   }
 catch (Loggable_exception &e)
   {

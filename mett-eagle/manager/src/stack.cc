@@ -9,18 +9,18 @@
 #include "stack.h"
 
 #include <l4/re/env>
-#include <l4/re/rm>
 #include <l4/re/error_helper>
+#include <l4/re/rm>
+#include <l4/re/util/shared_cap>
 
-  void
-Stack::set_stack(L4Re::Util::Ref_cap<L4Re::Dataspace>::Cap const &ds, unsigned size)
+void
+Stack::set_stack (L4Re::Util::Shared_cap<L4Re::Dataspace> const &ds,
+                  unsigned size)
 {
-  L4Re::chksys(L4Re::Env::env()->rm()->attach(&_vma, size,
-                                              L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
-                                              L4::Ipc::make_cap_rw(ds.get()),
-                                              0),
-               "attaching stack vma");
+  L4Re::chksys (L4Re::Env::env ()->rm ()->attach (
+                    &_vma, size, L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
+                    L4::Ipc::make_cap_rw (ds.get ()), 0),
+                "attaching stack vma");
   _stack_ds = ds;
-  set_local_top((char*)(_vma.get() + size));
+  set_local_top ((char *)(_vma.get () + size));
 }
-
