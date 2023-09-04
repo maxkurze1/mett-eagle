@@ -11,7 +11,6 @@
 
 #include <l4/liblog/error_helper>
 #include <l4/liblog/log>
-#include <l4/mett-eagle/manager>
 #include <l4/mett-eagle/util>
 #include <l4/re/util/cap_alloc>
 #include <l4/re/util/unique_cap>
@@ -21,10 +20,7 @@
 #include <l4/fmt/core.h>
 #include <l4/fmt/ranges.h>
 
-#include <atomic>
 #include <cstdio>
-#include <fstream>
-#include <iostream>
 #include <string>
 
 #include <time.h>
@@ -35,6 +31,14 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
+/**
+ * @brief A class that represents a single metric
+ * 
+ * An example metric could be 'execution time'
+ * 
+ * @tparam TYPE    The type of the measurements
+ * @tparam D_TYPE  The type used for division
+ */
 template <typename TYPE = l4_uint64_t, typename D_TYPE = double> struct Metric
 {
   std::list<TYPE> samples;
@@ -216,8 +220,6 @@ Metrics metrics_arr[THREAD_NUM];
 
 std::list<std::thread> threads;
 
-#include <l4/re/util/shared_cap>
-
 int
 main (const int /* argc */, const char *const /* argv */[])
 try
@@ -226,12 +228,11 @@ try
      * better into the .cfg */
     L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
 
-    log<DEBUG> ("Hello from client");
+    log<INFO> ("Hello from client");
 
     /* start threads */
     for (int i = 0; i < THREAD_NUM; i++)
-      threads.push_back (std::thread (benchmark, "rom/function1",
-      ITERATIONS,
+      threads.push_back (std::thread (benchmark, "rom/function1", ITERATIONS,
                                       &metrics_arr[i]));
 
     /* join threads */
@@ -240,9 +241,7 @@ try
 
     printf ("====   OUTPUT   ====\n");
     for (int i = 0; i < THREAD_NUM; i++)
-      {
         printf ("%s\n", metrics_arr[i].toString ().c_str ());
-      }
     printf ("==== END OUTPUT ====\n");
 
     return EXIT_SUCCESS;
@@ -257,32 +256,3 @@ catch (L4::Runtime_error &e)
     log<FATAL> ("{}", e);
     return e.err_no ();
   }
-
-
-// shared_cap test
-
-    // L4Re::Util::cap_alloc.print ();
-
-    // log<DEBUG> ("cap_alloc.alloc");
-
-    // L4::Cap<void> cap = L4Re::Util::cap_alloc.alloc ();
-    // L4Re::Util::cap_alloc.print ();
-
-    // log<DEBUG> ("creating Shared_cap");
-
-    // auto sh_cap = L4Re::Util::Shared_cap<void> (cap);
-    // L4Re::Util::cap_alloc.print ();
-
-    // log<DEBUG> ("copy shared");
-
-    // {
-    //   L4Re::Util::Shared_cap<void> sc2 = sh_cap;
-    //   L4Re::Util::cap_alloc.print ();
-    
-    // log<DEBUG> ("delete copy");
-    // }
-    // L4Re::Util::cap_alloc.print ();
-
-    // log<DEBUG> ("2nd shared_cap of some cap");
-    // L4Re::Util::Shared_cap<void> sc3(cap);
-    // L4Re::Util::cap_alloc.print ();

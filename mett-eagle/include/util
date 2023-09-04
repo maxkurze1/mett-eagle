@@ -9,22 +9,20 @@
  */
 /**
  * @file
- * Some utility methods for use by the client.
+ * Some utility methods for usage by clients.
  *
  * @headerfile <l4/mett-eagle/util>
  */
 
-#include <l4/liblog/log>
-#include <l4/mett-eagle/manager>
+#include <l4/mett-eagle/client>
+#include <l4/mett-eagle/registry>
+
+#include <l4/re/util/cap_alloc>
 #include <l4/re/error_helper>
 #include <l4/re/util/env_ns>
-#include <memory>
-#include <string>
-#include <l4/liballoc/alloc>
 
 namespace L4Re
 {
-
 namespace MettEagle
 {
 
@@ -40,10 +38,9 @@ namespace MettEagle
  * @return MettEagle::Manager Capability to a Manager Ipc_Gate
  */
 inline static L4::Cap<L4Re::MettEagle::Manager_Client>
-getManager (const char *const cap_name)
+getManager (const char *const cap_name) // TODO support custom cap_alloc
 {
-  /* get the initial ipc gate of the metteagle manager to register ourselves
-   */
+  /* get the initial ipc gate of the MettEagle manager to register ourselves */
   auto manager_registry = L4Re::chkcap (
       L4Re::Env::env ()->get_cap<MettEagle::Manager_Registry> (cap_name),
       "Couldn't get manager_registry capability");
@@ -51,13 +48,11 @@ getManager (const char *const cap_name)
   auto manager_cap = L4Re::chkcap (
       L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
       "allocate manager capability");
-  L4Re::LibLog::log<L4Re::LibLog::DEBUG>("manager cap idx {:#x}", manager_cap.cap());
   /* register ipc call, see MettEagle::Manager_Registry */
   L4Re::chksys (manager_registry->register_client (manager_cap),
                 "register_client");
   return manager_cap;
 }
 
-}
-
-}
+} // namespace MettEagle
+} // namespace L4Re

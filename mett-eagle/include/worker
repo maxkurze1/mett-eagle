@@ -1,0 +1,60 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the LICENSE.md file for details.
+ */
+/**
+ * @file
+ * The mett-eagle worker interfaces.
+ *
+ * @headerfile <l4/mett-eagle/worker>
+ */
+
+#pragma once
+
+#include <l4/mett-eagle/base>
+#include <l4/mett-eagle/common>
+
+#include <l4/re/parent>
+
+#include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_basics>
+#include <l4/sys/cxx/ipc_iface>
+#include <l4/sys/cxx/ipc_types>
+
+namespace L4Re
+{
+namespace MettEagle
+{
+
+/**
+ * @brief Interface provided to workers
+ *
+ * This interface will provide additional functionality only available to
+ * workers (e.g. a custom exit function). It also inherits the L4Re::Parent
+ * interface and will be passed as the L4Re::Env::env()->parent().
+ */
+struct Manager_Worker : L4::Kobject_2t<Manager_Worker, Manager_Base,
+                                       L4Re::Parent, PROTO_MANAGER_WORKER>
+{
+  /**
+   * @brief Faas specific exit functions that workers should use
+   *
+   * @note This function can be called by workers to tell the manger
+   * to delete their process and hand the returned string back to the
+   * client.
+   *
+   * @param[in] value  Exit value of the serverless function
+   * @return           L4_EOK on success or a negative error value
+   */
+  L4_INLINE_RPC (l4_msgtag_t, exit, (L4::Ipc::String<> value));
+
+  typedef L4::Typeid::Rpcs<exit_t> Rpcs;
+};
+
+} // namespace MettEagle
+} // namespace L4

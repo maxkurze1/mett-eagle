@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <l4/mett-eagle/manager>
+#include <l4/mett-eagle/worker>
 #include <l4/re/env>
 #include <string>
 

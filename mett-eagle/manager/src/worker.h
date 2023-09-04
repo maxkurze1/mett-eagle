@@ -30,7 +30,7 @@ private:
    * This data class is used to specify
    * which capabilities are passed to the created process,
    * the names they will have, the rights that will be transferred
-   * and the flags that are used for the fpage??
+   * and the flags that are used for the fpage
    */
   struct Initial_Cap
   {
@@ -44,17 +44,21 @@ private:
   std::list<std::string> _envp;
   std::list<Initial_Cap> _initial_capabilities;
 
+  /**
+   * This value will be set to false once an exit ipc call
+   * was received from the process
+   */
   bool _alive = true;
   std::string _exit_value;
+  int _exit_error;
 
   Const_dataspace _bin;
 
 public:
   explicit Worker (Const_dataspace bin,
-                   L4Re::Util::Shared_cap<L4Re::Parent> const &parent, // TODO maybe better just cap?
+                   L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
                    L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
                    L4Re::Util::Shared_cap<L4::Factory> const &alloc)
-                  //  = L4Re::Env::env ()->user_factory ())
       : Remote_app_model (parent, scheduler, alloc), _bin (bin)
   {
   }
@@ -69,7 +73,6 @@ public:
   void
   exit (std::string value)
   {
-    // TODO free resources
     _exit_value = value;
     _alive = false;
   }
@@ -84,7 +87,7 @@ public:
   void
   exit (int exit_code)
   {
-    // TODO free resources
+    _exit_error = exit_code;
     _alive = false;
   }
 
@@ -106,18 +109,8 @@ public:
     return _alive;
   }
 
-  // void
-  // Worker::terminate ()
-  // {
-  //   _task.reset ();
-  //   _thread.reset ();
-  //   _rm.reset ();
-
-  //   _r->unregister_obj (this);
-  // }
-
   /**
-   * Pushing the names of the initial capabilities to the stack ??
+   * Pushing the names of the initial capabilities to the stack
    * only for naming purposes ??
    *
    * also to reserve enough space / indices ??
@@ -284,7 +277,7 @@ public:
    * @param cap     The capability that should be mapped
    * @param name    Name of the capability inside the new process
    * @param rights  The rights that should be mapped
-   * @param flags   TODO flags?
+   * @param flags   Currently have meaning (reserved for later usage)
    */
   void
   add_initial_capability (L4::Cap<void> cap, std::string name,
@@ -292,6 +285,7 @@ public:
   {
     if (not L4Re::Env::Cap_entry::is_valid_name (name.c_str ()))
       {
+        // TODO maybe better throw?
         using namespace L4Re::LibLog;
         log<ERROR> ("Capability name '{}' too long -- ignored", name);
         return;

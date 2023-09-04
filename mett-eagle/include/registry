@@ -1,0 +1,74 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the LICENSE.md file for details.
+ */
+/**
+ * @file
+ * The mett-eagle registry interfaces.
+ *
+ * @headerfile <l4/mett-eagle/registry>
+ */
+
+#pragma once
+
+#include <l4/mett-eagle/common>
+#include <l4/mett-eagle/client>
+
+#include <l4/re/dataspace>
+#include <l4/re/error_helper>
+#include <l4/re/parent>
+#include <l4/re/util/env_ns>
+
+#include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_basics>
+#include <l4/sys/cxx/ipc_iface>
+#include <l4/sys/cxx/ipc_types>
+
+#include <l4/fmt/core.h>
+#include <l4/liblog/log>
+#include <l4/liblog/loggable-exception>
+
+#include <string>
+
+namespace L4Re
+{
+namespace MettEagle
+{
+/**
+ * @brief Interface to register a new client
+ *
+ * This interface can be used by clients to register themselves
+ * and get access to an IPC gate with the real Manager interface.
+ */
+struct Manager_Registry
+    : L4::Kobject_t<Manager_Registry, L4::Kobject, PROTO_MANAGER_REGISTRY>
+{
+public:
+  /**
+   * @brief Register a new client.
+   *
+   * The server will reply with a newly created Ipc_gate which should be used
+   * by the client for all subsequent requests. This is necessary for the
+   * manager to identify which message came from which client.
+   *
+   * @param[out] manager_ipc_gate  Manager Ipc_gate that should be used for all
+   *                               subsequent interaction
+   * @return                       L4_EOK on success
+   * @return                       -L4_EINVAL if the received capability is
+   *                               invalid
+   * @return                       -L4_ENOMEM if no new capability could be
+   *                               allocated
+   */
+  L4_INLINE_RPC (l4_msgtag_t, register_client,
+                 (L4::Ipc::Out<L4::Cap<Manager_Client> > manager_ipc_gate));
+
+  typedef L4::Typeid::Rpcs<register_client_t> Rpcs;
+};
+
+} // namespace MettEagle
+} // namespace L4

@@ -1,0 +1,152 @@
+// -*- Mode: C++ -*-
+// vim:ft=cpp
+/**
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
+ *
+ * This file is distributed under the terms of the
+ * GNU General Public License 2.
+ * Please see the LICENSE.md file for details.
+ */
+/**
+ * @file
+ * The mett-eagle base interfaces.
+ * That is the part of the interface that is shared by workers and clients.
+ *
+ * @headerfile <l4/mett-eagle/base>
+ */
+
+#pragma once
+
+#include <l4/mett-eagle/common>
+
+#include <l4/re/dataspace>
+#include <l4/re/error_helper>
+#include <l4/re/parent>
+#include <l4/re/util/env_ns>
+
+#include <l4/sys/capability>
+#include <l4/sys/cxx/ipc_basics>
+#include <l4/sys/cxx/ipc_iface>
+#include <l4/sys/cxx/ipc_types>
+
+#include <l4/fmt/core.h>
+#include <l4/liblog/log>
+#include <l4/liblog/loggable-exception>
+
+#include <string>
+
+namespace L4Re
+{
+namespace MettEagle
+{
+
+/**
+ * This config can be passed with invocations to control some
+ * properties of the worker
+ */
+struct Config
+{
+  /**
+   * the memory limit in bytes
+   * 0 means 'no limit'
+   */
+  l4_mword_t memory_limit = 0;
+};
+
+/**
+ * This data will be measured internally by the manager and can be
+ * returned from every invocation
+ */
+struct Metadata
+{
+  // start will be measured as short as possible before the creation of the
+  // worker process
+  std::chrono::time_point<std::chrono::high_resolution_clock> start;
+  // end will be measured shortly after the worker exit was received
+  // TODO maybe better to measure after worker has been destructed -- for
+  // symmetry
+  std::chrono::time_point<std::chrono::high_resolution_clock> end;
+};
+
+/**
+ * @brief Part of the interface that will be shared by clients and workers
+ */
+struct Manager_Base
+    : L4::Kobject_t<Manager_Base, L4::Kobject, PROTO_MANAGER_BASE>
+{
+  /**
+   * @brief Invoke a serverless function
+   *
+   * @note This function can be called by clients and workers.
+   * @note The action namespace will only be shared among clients and their
+   *       started functions. So a worker wont be able to invoke a function of
+   *       another client.
+   *
+   * @param[in]  name  Name of the function to invoke
+   * @param[in]  arg   Argument to the function
+   * @param[out] ret   Return value of the function
+   *
+   * @return  L4_EOK
+   *            on success
+   * @return  -L4_EINVAL
+   *            if the L4Re::Dataspace of the action is no longer valid
+   * @return  -L4_EMSGTOOLONG
+   *            if the receive buffer of the caller is not large enough to hold
+   *            the message (with null-terminator)
+   */
+  l4_msgtag_t
+  action_invoke (L4::Ipc::String<> name, L4::Ipc::String<> arg,
+                 L4::Ipc::Array<char> &ret, Config cfg = {},
+                 Metadata *data = nullptr)
+  {
+    Metadata _data;
+    return action_invoke_t::call (c (), name, arg, ret, cfg, data ?: &_data);
+  }
+
+  /**
+   * @brief Invoke a serverless function
+   *
+   * This is a utility function for
+   * action_invoke(L4::Ipc::String<>,L4::Ipc::String<>,L4::Ipc::Array<char>)
+   *
+   * This implementation will automatically create a buffer that is large
+   * enough to receive the ipc answer and convert it to a std::string.
+   *
+   * @param[in]  name  Name of the function to invoke
+   * @param[in]  arg   Argument to the function
+   * @param[out] ret   Return value of the function
+   *
+   * @return @see
+   * action_invoke(L4::Ipc::String<>,L4::Ipc::String<>,L4::Ipc::Array<char>)
+   *
+   * @throws L4Re::LibLog::Loggable_exception(-L4_EMSGTOOLONG) if allocated
+   * buffer is too small
+   */
+  l4_msgtag_t
+  action_invoke (L4::Ipc::String<> name, L4::Ipc::String<> arg,
+                 std::string &ret, Config cfg = {}, Metadata *data = nullptr)
+  {
+    Metadata _data;
+    /* allocate client receive buffer with max message length */
+    char buffer[L4::Ipc::Msg::Mr_bytes];
+    L4::Ipc::Array<char> arr (sizeof (buffer), buffer);
+    l4_msgtag_t mt
+        = action_invoke_t::call (c (), name, arg, arr, cfg, data ?: &_data);
+    /* ret will always be 0 terminated - if not, it was truncated */
+    if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))
+      throw LibLog::Loggable_exception (
+          -L4_EMSGTOOLONG, "The client receive buffer is too small");
+    /* create a std::string copy of the data */
+    ret = std::string (arr.data);
+    return mt;
+  }
+
+  L4_INLINE_RPC_NF (l4_msgtag_t, action_invoke,
+                    (L4::Ipc::String<> name, L4::Ipc::String<> arg,
+                     L4::Ipc::Array<char> &ret, Config cfg, Metadata *data));
+
+  typedef L4::Typeid::Rpcs<action_invoke_t> Rpcs;
+};
+
+} // namespace MettEagle
+} // namespace L4

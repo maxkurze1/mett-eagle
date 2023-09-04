@@ -35,5 +35,5 @@ Main (std::string args)
   auto duration
       = std::chrono::duration_cast<std::chrono::microseconds> (end - start);
 
-  return fmt::format("{}", duration.count()); // + ans;
+  return fmt::format("{}", duration.count());
 }

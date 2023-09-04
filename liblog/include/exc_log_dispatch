@@ -14,6 +14,11 @@
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
 
+namespace L4Re
+{
+namespace LibLog
+{
+
 /**
  * @brief Error catching and logging dispatcher
  *
@@ -60,3 +65,7 @@ struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
       }
   }
 };
+
+  
+} // namespace LibLog
+} // namespace L4Re
