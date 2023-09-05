@@ -31,8 +31,8 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
-static constexpr int THREAD_NUM = 1;
-static constexpr int ITERATIONS = 902; // 901 is fine
+static constexpr int THREAD_NUM = 10;
+static constexpr int ITERATIONS = 100; // 901 is fine
 static constexpr int waiting_time_ms = 0;
 
 /**
