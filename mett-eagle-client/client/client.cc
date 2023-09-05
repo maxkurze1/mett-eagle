@@ -31,8 +31,8 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
-static constexpr int THREAD_NUM = 10;
-static constexpr int ITERATIONS = 100; // 901 is fine
+static constexpr int THREAD_NUM = 1;
+static constexpr int ITERATIONS = 1000; // 901 is fine
 static constexpr int waiting_time_ms = 0;
 
 /**
@@ -210,11 +210,11 @@ try
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    log<FATAL> ("{}", e);
+    log<FATAL> (e);
   }
 catch (L4::Runtime_error &e)
   {
-    log<FATAL> ("{}", e);
+    log<FATAL> (e);
   }
 
 Metrics metrics_arr[THREAD_NUM];
@@ -250,11 +250,11 @@ try
   }
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    log<FATAL> ("{}", e);
+    log<FATAL> (e);
     return e.err_no ();
   }
 catch (L4::Runtime_error &e)
   {
-    log<FATAL> ("{}", e);
+    log<FATAL> (e);
     return e.err_no ();
   }

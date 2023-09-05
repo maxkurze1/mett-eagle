@@ -45,17 +45,17 @@ struct Exc_log_dispatch : private L4::Ipc_svr::Direct_dispatch<R>
       }
     catch (Loggable_exception &e)
       {
-        log<ERROR> ("{}", e);
+        log<ERROR> (e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Runtime_error &e)
       {
-        log<ERROR> ("{}", e);
+        log<ERROR> (e);
         return l4_msgtag (e.err_no (), 0, 0, 0);
       }
     catch (L4::Base_exception &e)
       {
-        log<ERROR> ("{}", e);
+        log<ERROR> (e);
         return l4_msgtag (-L4_EINVAL, 0, 0, 0);
       }
     catch (long err)

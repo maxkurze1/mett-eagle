@@ -17,37 +17,30 @@
 
 #pragma once
 
+#include <l4/liblog/arg_with_location>
+#include <l4/liblog/loggable-exception>
+
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ctime>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
-#include <stdexcept>
 #include <string>
 #include <thread>
-#include <tuple>
+#include <utility>
 
 #include <l4/fmt/chrono.h> // formatting of std::chrono
 #include <l4/fmt/core.h>
 #include <l4/fmt/std.h> // formatting of std::thread::id
 
-// #include <l4/cxx/exceptions>
-// #include <l4/liblog/loggable-exception>
+#include <l4/cxx/exceptions>
 #include <l4/re/env>
-// #include <l4/re/error_helper>
-// #include <l4/sys/err.h>
 #include <l4/sys/semaphore>
-
-#include <l4/liblog/arg_with_location>
 
 namespace L4Re
 {
 
 namespace LibLog
 {
+
 /**
  * @brief The output level of the Log
  *
@@ -59,9 +52,6 @@ namespace LibLog
  * @note the level will only be saved inside the environment variable
  *       'LOG_LEVEL'
  *
- * A level will by default also activate all higher levels.
- * the versions prefixed with _ONLY can be used to construct
- * a specific combination.
  *
  * For example:
  * @code{.cpp}
@@ -74,27 +64,6 @@ namespace LibLog
  * // only debug and error messages.
  * @endcode
  */
-// class Level
-// {
-// public:
-//   // clang-format off
-//   enum : l4_uint8_t
-//   {
-//     DEBUG =      0b11111,
-//     INFO  =      0b01111,
-//     WARN  =      0b00111,
-//     ERROR =      0b00011,
-//     FATAL =      0b00001,
-
-//     DEBUG_ONLY = 0b10000,
-//     INFO_ONLY  = 0b01000,
-//     WARN_ONLY  = 0b00100,
-//     ERROR_ONLY = 0b00010,
-//     FATAL_ONLY = 0b00001,
-//   };
-//   // clang-format on
-// };
-
 // clang-format off
 struct DEBUG { static constexpr const char *name = "\033[34;1mDEBUG\033[0m"; };
 struct INFO  { static constexpr const char *name = "\033[36;1mINFO \033[0m"; };
@@ -108,19 +77,15 @@ struct FATAL { static constexpr const char *name = "\033[35;1mFATAL\033[0m"; };
  *
  * Just ignore the start and end
  */
+// clang-format off
 struct NoSync
 {
-  void
-  start ()
-  {
-  }
-  void
-  end ()
-  {
-  }
+  void start () {}
+  void end () {}
 };
+// clang-format on
 
-//TODO somehow pass cap_name as template param
+// TODO somehow pass cap_name as template param
 
 /**
  * @brief Synchronization on a shared semaphore
@@ -175,7 +140,6 @@ struct NoSilence
   };
 };
 
-
 // TODO somehow pass "LOG_LEVEL" as template param?
 /**
  * @brief Use an environment env to decide which msg to silence
@@ -220,6 +184,26 @@ template <> constexpr int SilenceByEnv::severity_to_mask<FATAL>() { return 0b000
 // clang-format on
 
 /**
+ * @brief Get the output log level
+ */
+template <typename Silencer = SilenceByEnv>
+inline static int
+getLevel ()
+{
+  return Silencer::getLevel ();
+}
+
+/**
+ * @brief Set the output level of the log
+ */
+template <typename Silencer = SilenceByEnv>
+inline static void
+setLevel (int log_level)
+{
+  Silencer::setLevel (log_level);
+}
+
+/**
  * @brief More verbose format
  *
  * This format also includes thread_id, file name, function name and line.
@@ -259,7 +243,8 @@ struct CleanFormat
  * @tparam Synchronizer    Can be used to sync messages of multiple processes
  * @tparam FormatSpecifier The format of the printed messages
  */
-template <typename Severity, typename Silencer = SilenceByEnv, // TODO NoSilence as default?
+template <typename Severity,
+          typename Silencer = SilenceByEnv,      // TODO NoSilence as default?
           typename Synchronizer = SemaphoreSync, // TODO NoSync as default?
           typename FormatSpecifier = CleanFormat, typename... Args>
 inline static void
@@ -312,23 +297,43 @@ log (ArgWithLocation<const char *> format, Args &&...args)
 }
 
 /**
- * @brief Get the output log level
+ * @brief Utility logging method for logging a single object
+ *
+ * Note: object needs to be formattable by fmt::format
+ * Note: This method will print a line break per default!
+ *
+ * @param arg The object to print
  */
-template <typename Silencer = SilenceByEnv>
-inline static int
-getLevel ()
+template <typename... Types, typename ArgType>
+inline static void
+log (ArgType &&arg, const char *file = __builtin_FILE (),
+     const char *function = __builtin_FUNCTION (),
+     const int line = __builtin_LINE ())
 {
-  return Silencer::getLevel ();
+  std::string msg (fmt::format ("{}", std::forward<ArgType> (arg)));
+  ArgWithLocation<const char *> format (msg.c_str (), file, function, line);
+  log<Types...> (format);
 }
 
 /**
- * @brief Set the output level of the log
+ * @brief Utility logging method for logging loggable-exceptions
+ *
+ * This method is necessary to extract the location from the error
+ * itself in order to print the location of the 'throw' statement.
+ *
+ * Note: This method will print a line break per default!
+ *
+ * @param exception The exception to print
  */
-template <typename Silencer = SilenceByEnv>
+template <typename... Types>
 inline static void
-setLevel (int log_level)
+log (Loggable_exception exception)
 {
-  Silencer::setLevel (log_level);
+  std::string msg (fmt::format ("{}", exception));
+  ArgWithLocation<const char *> format (msg.c_str (), exception.file (),
+                                        exception.function (),
+                                        exception.line ());
+  log<Types...> (format);
 }
 
 } // namespace LibLog

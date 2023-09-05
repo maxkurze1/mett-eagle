@@ -20,7 +20,7 @@ constexpr unsigned long chunk_size = 8192UL;
 std::list<void *> mem;
 
 std::string
-Main (std::string args)
+Main (std::string /* args */)
 {
   int size = 0;
   while (true)

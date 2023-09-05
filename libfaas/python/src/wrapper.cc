@@ -133,12 +133,12 @@ try
  */
 catch (L4Re::LibLog::Loggable_exception &e)
   {
-    log<FATAL> ("{}", e);
+    log<FATAL> (e);
     return e.err_no (); // propagate the error to the client
   }
 catch (L4::Runtime_error &e)
   {
-    log<FATAL> ("{}", e);
+    log<FATAL> (e);
     return e.err_no (); // propagate the error to the client
   }
 catch (... /* catch all */)
