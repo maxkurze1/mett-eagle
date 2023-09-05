@@ -17,7 +17,7 @@ void
 Stack::set_stack (L4Re::Util::Shared_cap<L4Re::Dataspace> const &ds,
                   unsigned size)
 {
-  L4Re::chksys (L4Re::Env::env ()->rm ()->attach (
+  chksys (L4Re::Env::env ()->rm ()->attach (
                     &_vma, size, L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
                     L4::Ipc::make_cap_rw (ds.get ()), 0),
                 "attaching stack vma");

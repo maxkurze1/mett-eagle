@@ -8,6 +8,8 @@
  */
 #pragma once
 
+#include "manager.h"
+
 #include <l4/libloader/remote_mem>
 #include <l4/re/dataspace>
 #include <l4/re/error_helper>
@@ -38,7 +40,7 @@ protected:
       {
         l4_addr_t offs = l4_trunc_page (addr - _vma.get ());
         l4_addr_t end = l4_round_page (addr + sz - _vma.get ());
-        L4Re::chksys (_stack_ds->allocate (offs, end - offs));
+        chksys (_stack_ds->allocate (offs, end - offs));
         _last_checked = l4_trunc_page (l4_addr_t (addr));
       }
   }

@@ -7,6 +7,7 @@
  * Please see the COPYING-GPL-2 file for details.
  */
 
+#include "manager.h"
 #include "app_model.h"
 
 #include <l4/liballoc/alloc>
@@ -14,9 +15,6 @@
 #include <l4/re/util/env_ns>
 
 #include <l4/liblog/log>
-
-using L4Re::chkcap;
-using L4Re::chksys;
 
 /**
  * @brief Allocate a Dataspace
@@ -107,14 +105,14 @@ App_model::local_detach_ds (l4_addr_t addr, unsigned long /*size*/) const
 App_model::App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
                       L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
                       L4Re::Util::Shared_cap<L4::Factory> const &alloc)
-    : _task (L4Re::chkcap (L4Re::Util::make_unique_cap<L4::Task> (),
+    : _task (chkcap (L4Re::Util::make_unique_cap<L4::Task> (),
                            "allocating task cap")),
-      _thread (L4Re::chkcap (L4Re::Util::make_unique_cap<L4::Thread> (),
+      _thread (chkcap (L4Re::Util::make_unique_cap<L4::Thread> (),
                              "allocating thread cap")),
-      _rm (L4Re::chkcap (L4Re::Util::make_unique_cap<L4Re::Rm> (),
+      _rm (chkcap (L4Re::Util::make_unique_cap<L4Re::Rm> (),
                          "allocating region-map cap"))
 {
-  L4Re::chksys (alloc->create (_rm.get ()), "allocating new region map");
+  chksys (alloc->create (_rm.get ()), "allocating new region map");
 
   // set default values for utcb area, values may be changed by loader
   prog_info ()->utcbs_start = Utcb_area_start;

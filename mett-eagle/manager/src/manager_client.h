@@ -1,5 +1,3 @@
-// -*- Mode: C++ -*-
-// vim:ft=cpp
 /**
  * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
  *

@@ -97,21 +97,21 @@ Manager_Registry_Epiface::op_register_client (
     //   log<DEBUG>("called callback");
     // });
 
-    auto stack_cap = L4Re::chkcap (
+    auto stack_cap = chkcap (
         L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (), "alloc cap");
 
     // alloc single page for the thread stack
     int stack_size = 4096;
-    L4Re::chksys (env->mem_alloc ()->alloc (stack_size, stack_cap));
+    chksys (env->mem_alloc ()->alloc (stack_size, stack_cap));
 
     l4_addr_t stack_addr;
-    L4Re::chksys (
+    chksys (
         env->rm ()->attach (&stack_addr, stack_size,
                             L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
                             L4::Ipc::make_cap_rw (stack_cap), L4_STACK_ALIGN),
         "attaching stack vma");
 
-    L4Re::chksys (
+    chksys (
         client_thread->ex_regs (
             (l4_addr_t)client_function /* some address */,
             l4_align_stack_for_direct_fncall ((unsigned long)stack_addr), 0),
@@ -120,7 +120,7 @@ Manager_Registry_Epiface::op_register_client (
     // run thread
     log<DEBUG> ("running test thread");
 
-    L4Re::chksys (env->scheduler ()->run_thread (
+    chksys (env->scheduler ()->run_thread (
         client_thread, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
 #endif
 
@@ -137,7 +137,7 @@ Manager_Registry_Epiface::op_register_client (
   l4_umword_t bitmap = select_client_cpu ();
   log<DEBUG> ("Selected cpu {:#b}", bitmap);
 
-  L4Re::chksys (
+  chksys (
       l4_msgtag_t (L4Re::Env::env ()->user_factory ()->create<L4::Scheduler> (
                        sched_cap.get ())
                    << limit << offset << bitmap),
@@ -147,6 +147,11 @@ Manager_Registry_Epiface::op_register_client (
   pthread_attr_t attr;
 
   pthread_attr_init (&attr);
+  /*
+   * This will prevent pthreads from directly starting the new thread and is
+   * necessary to make sure that the passed pointer argument points to a valid
+   * object.
+   */
   attr.create_flags |= PTHREAD_L4_ATTR_NO_START;
 
   /*
@@ -224,13 +229,8 @@ Manager_Registry_Epiface::op_register_client (
           canceled);
     }
 
-  /*
-   * start the thread and wait until the pointer to 'client_server' was
-   * copied into it before leaving the function and discarding the stack
-   */
-  L4Re::chksys (sched_cap->run_thread (
+  chksys (sched_cap->run_thread (
       thread_cap, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
-  manager_ipc_gate = L4::Cap<MettEagle::Manager_Client> ();
 
   /*
    * Note: The thread might start the server loop after the ipc call returned

@@ -38,7 +38,7 @@ Manager_Worker_Epiface::op_signal (L4Re::Parent::Rights, unsigned long sig,
        * called.
        * in case of an error, value holds the error code
        */
-      log<ERROR> ("Worker finished with wrong exit! - {:s} (=exit: {:d})",
+      log<ERROR> ("Worker finished with wrong exit! {:s} (=exit: {:d})",
                   l4sys_errtostr (err), err);
 
       // TODO return error to parent

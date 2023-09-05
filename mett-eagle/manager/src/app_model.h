@@ -146,7 +146,6 @@ struct App_model : public Ldr::Base_app_model<Stack>
     sp.affinity = cpus;
 
     using namespace L4Re::LibLog;
-    log<DEBUG> ("Scheduling on cpu {:#x}", cpus.map);
 
     return scheduler->run_thread (thread, sp);
   }

@@ -46,18 +46,20 @@ namespace MettEagle
  * clients.
  *
  * @note The clients will receive this interface via the manager registry.
+ *
+ * @see Manager_Base the inherited base interface
  */
 struct Manager_Client
     : L4::Kobject_t<Manager_Client, Manager_Base, PROTO_MANAGER_CLIENT,
                     L4::Type_info::Demand_t<1> >
-// It is necessary to declare the Demand_t<1> to receive the file capability
-// it is also necessary to use the Br_manager to allocate the needed receive
+// It is necessary to declare the Demand_t<1> to receive the file capabilities.
+// Tt is also necessary to use the Br_manager to allocate the needed receive
 // capability
 {
   /**
    * @brief Create a new 'action' (= faas function)
    *
-   * This will create a new action with the contents of the file.
+   * This will create a new action with the contents of a file.
    *
    * @param[in] name  Name that will identify the action
    * @param[in] file  Dataspace capability representing the binary file
@@ -77,6 +79,9 @@ struct Manager_Client
    * @brief Create a new 'action' (= faas function)
    *
    * Utility wrapper to search for the given file name inside the L4Re::Env_ns
+   * This will be called by the client, therefore the environment of the
+   * client will be search and only the client needs to have access to the
+   * file.
    *
    * @param[in] name            Name of the action
    * @param[in] pathname        L4Re::Env_ns name of the file
