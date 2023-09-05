@@ -61,10 +61,8 @@ class Safe_counting_cap_alloc : public Cap_alloc
 {
 private:
   std::atomic<COUNTER_TYPE> _items[CAPACITY];
-  std::atomic<long> _free_hint = 0;
+  // std::atomic<long> _free_hint = 0;
   const long _bias;
-
-  // L4::Cap<L4::Semaphore> _sema{ L4::Cap<L4::Semaphore>::No_init };
 
 public:
   /**
@@ -78,15 +76,6 @@ public:
   Safe_counting_cap_alloc () noexcept
       : _bias (L4Re::Env::env ()->first_free_cap () + 1)
   {
-    
-    // L4Re::Env const *e = L4Re::Env::env ();
-    // L4::Cap<L4Re::Dataspace> _ds (e->first_free_cap () << L4_CAP_SHIFT);
-    // l4_check (e->mem_alloc ()->alloc (sizeof (COUNTER_TYPE) * CAPACITY, _ds)
-    //           >= 0);
-    // l4_check (e->rm ()->attach (&_items, sizeof (COUNTER_TYPE) * CAPACITY,
-    //                             L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
-    //                             L4::Ipc::make_cap_rw (_ds))
-    //           >= 0);
   }
 
 public:
@@ -104,13 +93,14 @@ public:
   alloc () noexcept
   {
     COUNTER_TYPE expected;
-    for (long i = _free_hint; i < CAPACITY; ++i)
+    for (long i = /* _free_hint.load() */ 0; i < CAPACITY; ++i)
       {
         expected = 0;
         if (_items[i].compare_exchange_strong (expected, 1))
           {
             // successful atomic exchange -> acquired capability
-            _free_hint = i + 1;
+            // expected = i;
+            // _free_hint.compare_exchange_strong(expected, i+1);
             return L4::Cap<void> ((i + _bias) << L4_CAP_SHIFT);
           }
       }
@@ -170,8 +160,8 @@ public:
 
     // TODO compare and set are not atomic, we may loose a smaller capability
     // index
-    if (c < _free_hint.load ())
-      _free_hint = c;
+    // if (c < _free_hint.load ())
+    //   _free_hint = c;
 
     _items[c] = 0;
   }
@@ -211,8 +201,8 @@ public:
           l4_task_unmap (task, cap.fpage (), unmap_flags);
 
         // todo not atomic
-        if (c < _free_hint.load ())
-          _free_hint = c;
+        // if (c < _free_hint.load ())
+        //   _free_hint = c;
 
         return true;
       }
@@ -264,8 +254,6 @@ private:
     return *c < CAPACITY;
   }
 };
-
-// extern Safe_counting_cap_alloc<> safe_cap_alloc;
 
 }
 
