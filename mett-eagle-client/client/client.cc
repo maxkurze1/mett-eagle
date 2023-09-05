@@ -31,6 +31,10 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
+static constexpr int THREAD_NUM = 1;
+static constexpr int ITERATIONS = 902; // 901 is fine
+static constexpr int waiting_time_ms = 0;
+
 /**
  * @brief A class that represents a single metric
  * 
@@ -143,7 +147,7 @@ struct Metrics
 };
 
 static void
-benchmark (const char *action_name, int iterations, Metrics *metrics)
+benchmark (const char *action_name, Metrics *metrics)
 try
   {
     /* setup */
@@ -151,14 +155,14 @@ try
     L4Re::chksys (manager->action_create ("testAction", action_name),
                   "action create");
 
-    for (int i = 0; i < iterations; i++)
+    for (int i = 0; i < ITERATIONS; i++)
       {
         /* invocation */
         auto before_invocation = std::chrono::high_resolution_clock::now ();
 
         std::string answer;
         MettEagle::Metadata data;
-        L4Re::chksys (manager->action_invoke ("testAction", "some argument",
+        L4Re::chksys (manager->action_invoke ("testAction", std::to_string(waiting_time_ms).c_str(),
                                               answer, {}, &data),
                       "action invoke");
 
@@ -213,9 +217,6 @@ catch (L4::Runtime_error &e)
     log<FATAL> ("{}", e);
   }
 
-static constexpr int THREAD_NUM = 12;
-static constexpr int ITERATIONS = 100;
-
 Metrics metrics_arr[THREAD_NUM];
 
 std::list<std::thread> threads;
@@ -231,8 +232,9 @@ try
     log<INFO> ("Hello from client");
 
     /* start threads */
+
     for (int i = 0; i < THREAD_NUM; i++)
-      threads.push_back (std::thread (benchmark, "rom/function1", ITERATIONS,
+      threads.push_back (std::thread (benchmark, "rom/function1",
                                       &metrics_arr[i]));
 
     /* join threads */
