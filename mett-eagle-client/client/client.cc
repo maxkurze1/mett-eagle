@@ -31,7 +31,7 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
-static constexpr int THREAD_NUM = 2;
+static constexpr int THREAD_NUM = 12;
 static constexpr int ITERATIONS = 1000; // 901 is fine
 static constexpr int waiting_time_ms = 0;
 
@@ -242,7 +242,7 @@ try
     /* start threads */
 
     for (int i = 0; i < THREAD_NUM; i++){
-      std::thread thread(benchmark, i % 2 == 0? "rom/function1" : "rom/function1",
+      std::thread thread(benchmark, "rom/function1",
                                       &metrics_arr[i]);
       l4_debugger_set_object_name(std::L4::thread_cap(thread).cap(), fmt::format("me clnt {}", i).c_str());
       threads.push_back (std::move(thread));

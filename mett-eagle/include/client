@@ -101,8 +101,6 @@ struct Manager_Client
     if (L4_UNLIKELY (not file.is_valid ()))
       throw LibLog::Loggable_exception (-L4_EINVAL,
                                         "Couldn't find file '{:s}'", pathname);
-    L4Re::LibLog::log<L4Re::LibLog::DEBUG> ("Dataspace cap idx {:#x}",
-                                            file.cap ());
     return action_create_t::call (c (), name, file);
   }
 
