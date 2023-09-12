@@ -54,6 +54,10 @@ Manager_Worker_Epiface::op_signal (L4Re::Parent::Rights, unsigned long sig,
       /* do not send answer -- child shouldn't exist anymore */
       return -L4_ENOREPLY;
     }
+  else
+    {
+      log<WARN> ("Got unknown signal '{:d}' with value '{:d}'", sig, val);
+    }
   /* do nothing per default */
   return L4_EOK;
 }
@@ -72,7 +76,7 @@ Manager_Worker_Epiface::op_exit (MettEagle::Manager_Worker::Rights,
   L4Re::Env::env ()->task ()->release_cap (obj_cap ());
   // TODO delete this;
 
-  /* With -L4_ENOREPLY no answer will be send to the worker. Thus the worker
-   * will keep waiting. */
+  /* With -L4_ENOREPLY no answer will be send to the worker. Keep the worker
+   * thread blocked until destroyed. */
   return -L4_ENOREPLY;
 }

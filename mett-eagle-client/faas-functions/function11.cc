@@ -13,6 +13,9 @@
 std::string
 Main (std::string args)
 {
+  // if (std::stoi(args))
+  //   log<WARN>("passed 0");
+
   auto start = std::chrono::high_resolution_clock::now ();
 
   std::this_thread::sleep_for (std::chrono::milliseconds (std::stoi(args)));

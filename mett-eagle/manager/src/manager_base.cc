@@ -12,6 +12,8 @@
 
 #include <l4/sys/cxx/ipc_server_loop>
 
+#include <l4/sys/debugger.h>
+
 long
 Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                                         const L4::Ipc::String_in_buf<> &_name,
@@ -25,8 +27,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   /* data store on stack to prevent corruption of values inside utcb
    * see next 'Note' for more information */
   MettEagle::Metadata meta_data;
-
-  log<DEBUG> ("Invoke action name='{:s}'", name);
+  log<DEBUG> ("Invoke action name='{}'", name);
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name) == 0))
     throw Loggable_exception (-L4_EINVAL, "Action '{}' doesn't exist", name);
@@ -92,6 +93,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                 parent_ipc_cap.get (), _thread,
                 l4_umword_t (worker_epiface.get ())),
             "Failed to create gate");
+    l4_debugger_set_object_name(parent_ipc_cap.cap(), "wrkr->mngr");
     auto worker_server = std::make_unique<L4::Ipc_svr::Default_loop_hooks> ();
     worker_epiface->set_server (worker_server.get (), parent_ipc_cap.get ());
 
@@ -99,11 +101,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     /* pass data as first argument string */
     worker->set_argv_strings ({ arg.data });
     worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=31" });
-    /* pass semaphore to sync log messages -- TODO can be removed for final
-     * benchmarking */
-    worker->add_initial_capability (
-        L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync"), "log_sync",
-        L4_CAP_FPAGE_RWSD);
+
 
     /**
      * The corresponding 'end' measurement will be taken in the exit ipc
@@ -112,6 +110,9 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     worker_epiface->start = std::chrono::high_resolution_clock::now ();
 
     worker->launch ();
+    l4_debugger_set_object_name(worker->_task.cap(), "wrkr");
+    l4_debugger_set_object_name(worker->_thread .cap(), "wrkr");
+    l4_debugger_set_object_name(worker->_rm .cap(), "wrkr rm");
 
     /**
      * ========================== Server loop ==========================

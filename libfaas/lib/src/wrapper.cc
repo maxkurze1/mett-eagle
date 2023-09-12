@@ -22,6 +22,8 @@
 using namespace L4Re::LibLog;
 using L4Re::LibLog::Loggable_exception;
 
+#include <l4/sys/kdebug.h>
+
 /**
  * @brief Wrapper main that will handle the manager interaction
  */
@@ -41,7 +43,7 @@ try
      * to pass a string the custom manager->exit must be used.     */
     L4Re::chksys (L4Re::Faas::getManager ()->exit (ret.c_str ()), "exit rpc");
 
-    __builtin_unreachable();
+    throw Loggable_exception(-L4_EFAULT, "wrapper unreachable");
   }
 /**
  * These catch blocks will catch errors that are thrown by utility
@@ -60,5 +62,5 @@ catch (L4::Runtime_error &e)
 catch (... /* catch all */)
   {
     log<FATAL> ("Function threw unknown error.");
-    return -L4_EINVAL;
+    return -0xDEAD;
   }

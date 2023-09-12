@@ -31,7 +31,7 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
-static constexpr int THREAD_NUM = 1;
+static constexpr int THREAD_NUM = 2;
 static constexpr int ITERATIONS = 1000; // 901 is fine
 static constexpr int waiting_time_ms = 0;
 
@@ -157,6 +157,8 @@ try
 
     for (int i = 0; i < ITERATIONS; i++)
       {
+        log<DEBUG>("Iteration {}", i);
+
         /* invocation */
         auto before_invocation = std::chrono::high_resolution_clock::now ();
 
@@ -221,10 +223,16 @@ Metrics metrics_arr[THREAD_NUM];
 
 std::list<std::thread> threads;
 
+#include <l4/sys/debugger.h>
+#include <thread-l4>
+
 int
 main (const int /* argc */, const char *const /* argv */[])
 try
   {
+    l4_debugger_set_object_name(L4Re::Env::env()->task().cap(), "me clnt"); // mett-eagle client
+    l4_debugger_set_object_name(L4Re::Env::env()->main_thread().cap(), "me clnt main");
+
     /* increase log semaphore once to prevent deadlock ... TODO this would fit
      * better into the .cfg */
     L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
@@ -233,9 +241,12 @@ try
 
     /* start threads */
 
-    for (int i = 0; i < THREAD_NUM; i++)
-      threads.push_back (std::thread (benchmark, "rom/function1",
-                                      &metrics_arr[i]));
+    for (int i = 0; i < THREAD_NUM; i++){
+      std::thread thread(benchmark, i % 2 == 0? "rom/function1" : "rom/function1",
+                                      &metrics_arr[i]);
+      l4_debugger_set_object_name(std::L4::thread_cap(thread).cap(), fmt::format("me clnt {}", i).c_str());
+      threads.push_back (std::move(thread));
+    }
 
     /* join threads */
     for (std::thread &t : threads)

@@ -19,6 +19,9 @@
 #include <l4/mett-eagle/worker>
 #include <l4/re/env>
 #include <string>
+#include <l4/liblog/log>
+
+using namespace L4Re::LibLog;
 
 /**
  * Main function that needs to be implemented by the faas function
@@ -27,7 +30,6 @@ extern std::string Main (std::string);
 
 namespace L4Re
 {
-
 namespace Faas
 {
 
@@ -63,6 +65,5 @@ invoke (std::string name, std::string arg)
   return ret;
 }
 
-}
-
-}
+} // namespace Faas
+} // namespace L4Re

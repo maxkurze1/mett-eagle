@@ -37,5 +37,9 @@ using namespace L4Re::LibLog;
 /**
  * Cpu bitmap of cpus accessible to the manager process
  * that are not currently assigned to clients.
+ *
+ * Currently this map only supports up to 64 CPUs, but even moe
+ * only supports an l4_umword_t as bitmap for the creation of L4::Scheduler
+ * objects
  */
 extern std::bitset<sizeof (l4_sched_cpu_set_t::map) * 8> available_cpus;

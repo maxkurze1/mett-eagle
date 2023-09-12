@@ -244,8 +244,9 @@ struct CleanFormat
  * @tparam FormatSpecifier The format of the printed messages
  */
 template <typename Severity,
-          typename Silencer = SilenceByEnv,      // TODO NoSilence as default?
-          typename Synchronizer = SemaphoreSync, // TODO NoSync as default?
+          typename Silencer = SilenceByEnv, // TODO NoSilence as default?
+          typename Synchronizer
+          = NoSync, // SemaphoreSync, // TODO NoSync as default?
           typename FormatSpecifier = CleanFormat, typename... Args>
 inline static void
 log (ArgWithLocation<const char *> format, Args &&...args)
@@ -297,6 +298,16 @@ log (ArgWithLocation<const char *> format, Args &&...args)
 }
 
 /**
+ * Necessary to prevent the following log function to match on log invocations
+ * with matching arguments
+ *
+ * e.g. log<INFO>("{} {} {}", "some string", "another string", 10);
+ *
+ */
+struct Empty
+{
+};
+/**
  * @brief Utility logging method for logging a single object
  *
  * Note: object needs to be formattable by fmt::format
@@ -306,7 +317,7 @@ log (ArgWithLocation<const char *> format, Args &&...args)
  */
 template <typename... Types, typename ArgType>
 inline static void
-log (ArgType &&arg, const char *file = __builtin_FILE (),
+log (ArgType &&arg, Empty = {}, const char *file = __builtin_FILE (),
      const char *function = __builtin_FUNCTION (),
      const int line = __builtin_LINE ())
 {

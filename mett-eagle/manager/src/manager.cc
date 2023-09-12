@@ -26,6 +26,8 @@ std::bitset<sizeof (l4_sched_cpu_set_t::map) * 8> available_cpus;
  */
 L4Re::Util::Registry_server<> register_server;
 
+#include <l4/sys/debugger.h>
+
 /**
  * This is the entry point of the Mett-Eagle manager
  * server. This method will be started by ned, as specified
@@ -35,6 +37,9 @@ int
 main (const int /* argc */, const char *const /* argv */[])
 try
   {
+    l4_debugger_set_object_name(L4Re::Env::env()->task().cap(), "mngr");
+    l4_debugger_set_object_name(L4Re::Env::env()->main_thread().cap(), "mngr reg");
+
     /**
      * Query available cpu-set which can be distributed to clients
      */

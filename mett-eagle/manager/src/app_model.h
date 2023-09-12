@@ -45,9 +45,9 @@ struct App_model : public Ldr::Base_app_model<Stack>
   typedef L4Re::Util::Shared_cap<L4Re::Dataspace> Const_dataspace;
   typedef Stack_base::Dataspace Dataspace;
 
-  L4Re::Util::Unique_cap<L4::Task> _task;
-  L4Re::Util::Unique_cap<L4::Thread> _thread;
-  L4Re::Util::Unique_cap<L4Re::Rm> _rm;
+  L4Re::Util::Unique_del_cap<L4::Task> _task;
+  L4Re::Util::Unique_del_cap<L4::Thread> _thread; // TODO schneller ohne del aber sicherer?
+  L4Re::Util::Unique_del_cap<L4Re::Rm> _rm;
 
   explicit App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
                       L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,

@@ -50,14 +50,12 @@ App_model::prog_attach_ds (l4_addr_t addr, unsigned long size,
                            Const_dataspace ds, unsigned long offset,
                            L4Re::Rm::Flags flags, char const *what)
 {
-  auto rh_flags = flags;
-
   if (!ds.is_valid ())
-    rh_flags |= L4Re::Rm::F::Reserved;
+    flags |= L4Re::Rm::F::Reserved;
 
   l4_addr_t _addr = addr;
   L4Re::chksys (
-      _rm->attach (&_addr, size, rh_flags,
+      _rm->attach (&_addr, size, flags,
                    L4::Ipc::make_cap (ds.get (), flags.cap_rights ()), offset,
                    0),
       what);
@@ -87,6 +85,7 @@ App_model::local_attach_ds (Const_dataspace ds, unsigned long size,
   l4_addr_t in_pg_offset = offset - pg_offset;
   unsigned long pg_size = l4_round_page (size + in_pg_offset);
   l4_addr_t vaddr = 0;
+  chkcap (ds.get(), "idk anymore");
   chksys (rm->attach (&vaddr, pg_size,
                       L4Re::Rm::F::Search_addr | L4Re::Rm::F::R, ds.get (),
                       pg_offset),
@@ -105,11 +104,11 @@ App_model::local_detach_ds (l4_addr_t addr, unsigned long /*size*/) const
 App_model::App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
                       L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
                       L4Re::Util::Shared_cap<L4::Factory> const &alloc)
-    : _task (chkcap (L4Re::Util::make_unique_cap<L4::Task> (),
+    : _task (chkcap (L4Re::Util::make_unique_del_cap<L4::Task> (),
                            "allocating task cap")),
-      _thread (chkcap (L4Re::Util::make_unique_cap<L4::Thread> (),
+      _thread (chkcap (L4Re::Util::make_unique_del_cap<L4::Thread> (),
                              "allocating thread cap")),
-      _rm (chkcap (L4Re::Util::make_unique_cap<L4Re::Rm> (),
+      _rm (chkcap (L4Re::Util::make_unique_del_cap<L4Re::Rm> (),
                          "allocating region-map cap"))
 {
   chksys (alloc->create (_rm.get ()), "allocating new region map");

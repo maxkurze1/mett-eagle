@@ -40,8 +40,6 @@ namespace LibLog
  * \param extra Optional text for exception (default "")
  *
  * This function throws an exception if the err is negative.
- *
- * @note This function DOES NOT return err.
  */
 template <typename Function = void (*) (long)>
 inline long

@@ -25,6 +25,8 @@
 #include <pthread.h>
 #include <strings.h> // needed for ffsll
 
+#include <l4/sys/debugger.h>
+
 /**
  * This will select a cpu for a newly connected client
  *
@@ -142,6 +144,7 @@ Manager_Registry_Epiface::op_register_client (
                        sched_cap.get ())
                    << limit << offset << bitmap),
       "Failed to create scheduler");
+  l4_debugger_set_object_name(sched_cap.cap(), "mngr clnt");
 
   pthread_t pthread;
   pthread_attr_t attr;
@@ -204,6 +207,7 @@ Manager_Registry_Epiface::op_register_client (
       log<ERROR> ("failed to create thread");
     }
   auto thread_cap = L4::Cap<L4::Thread> (pthread_l4_cap (pthread));
+  l4_debugger_set_object_name(thread_cap.cap(), "mngr clnt");
 
   pthread_attr_destroy (&attr);
 
@@ -217,6 +221,7 @@ Manager_Registry_Epiface::op_register_client (
   /* register the object in the server loop. This will create the        *
    * capability for the object and inform the server to route IPC there. */
   L4::Cap<void> cap = client_server->registry ()->register_obj (epiface);
+  l4_debugger_set_object_name(cap.cap(), "clnt->mngr");
   if (L4_UNLIKELY (not cap.is_valid ()))
     {
       client_server->registry ()->unregister_obj (epiface);
