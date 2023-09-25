@@ -246,7 +246,7 @@ struct CleanFormat
 template <typename Severity,
           typename Silencer = SilenceByEnv, // TODO NoSilence as default?
           typename Synchronizer
-          = NoSync, // SemaphoreSync, // TODO NoSync as default?
+          = SemaphoreSync, // TODO NoSync as default?
           typename FormatSpecifier = CleanFormat, typename... Args>
 inline static void
 log (ArgWithLocation<const char *> format, Args &&...args)

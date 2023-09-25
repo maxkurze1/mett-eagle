@@ -31,15 +31,15 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
-static constexpr int THREAD_NUM = 12;
-static constexpr int ITERATIONS = 1000; // 901 is fine
-static constexpr int waiting_time_ms = 0;
+static constexpr int THREAD_NUM = 11;
+static constexpr int ITERATIONS = 100; // 901 is fine
+static constexpr int waiting_time_ms = 10000;
 
 /**
  * @brief A class that represents a single metric
- * 
+ *
  * An example metric could be 'execution time'
- * 
+ *
  * @tparam TYPE    The type of the measurements
  * @tparam D_TYPE  The type used for division
  */
@@ -157,16 +157,27 @@ try
 
     for (int i = 0; i < ITERATIONS; i++)
       {
-        log<DEBUG>("Iteration {}", i);
+        // log<DEBUG> ("Iteration {}", i);
 
-        /* invocation */
+                /* invocation */
         auto before_invocation = std::chrono::high_resolution_clock::now ();
 
         std::string answer;
         MettEagle::Metadata data;
-        L4Re::chksys (manager->action_invoke ("testAction", std::to_string(waiting_time_ms).c_str(),
-                                              answer, {}, &data),
-                      "action invoke");
+        try
+          {
+            L4Re::chksys (manager->action_invoke (
+                              "testAction",
+                              std::to_string (waiting_time_ms).c_str (),
+                              answer, {}, &data),
+                          "action invoke");
+          }
+        catch (...)
+          {
+            log<ERROR>("action invoke with error");
+            i--;
+            continue;
+          }
 
         auto after_invocation = std::chrono::high_resolution_clock::now ();
 
@@ -242,11 +253,11 @@ try
     /* start threads */
 
     for (int i = 0; i < THREAD_NUM; i++){
-      std::thread thread(benchmark, "rom/function1",
+        std::thread thread(benchmark, "rom/function1",
                                       &metrics_arr[i]);
-      l4_debugger_set_object_name(std::L4::thread_cap(thread).cap(), fmt::format("me clnt {}", i).c_str());
-      threads.push_back (std::move(thread));
-    }
+        l4_debugger_set_object_name(std::L4::thread_cap(thread).cap(), fmt::format("me clnt {}", i).c_str());
+        threads.push_back (std::move(thread));
+      }
 
     /* join threads */
     for (std::thread &t : threads)
@@ -254,7 +265,7 @@ try
 
     printf ("====   OUTPUT   ====\n");
     for (int i = 0; i < THREAD_NUM; i++)
-        printf ("%s\n", metrics_arr[i].toString ().c_str ());
+      printf ("%s\n", metrics_arr[i].toString ().c_str ());
     printf ("==== END OUTPUT ====\n");
 
     return EXIT_SUCCESS;

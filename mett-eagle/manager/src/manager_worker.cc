@@ -41,15 +41,8 @@ Manager_Worker_Epiface::op_signal (L4Re::Parent::Rights, unsigned long sig,
       log<ERROR> ("Worker finished with wrong exit! {:s} (=exit: {:d})",
                   l4sys_errtostr (err), err);
 
-      // TODO return error to parent
-      // TODO maybe better to delete cap??
-
       /* using exit(int) to indicate unusual exit */
       _worker->exit (err);
-      L4Re::Env::env ()->task ()->release_cap (obj_cap ()); // TODO check again
-      // TODO terminate ();
-
-      // TODO delete this;
 
       /* do not send answer -- child shouldn't exist anymore */
       return -L4_ENOREPLY;
@@ -71,10 +64,7 @@ Manager_Worker_Epiface::op_exit (MettEagle::Manager_Worker::Rights,
   const char *value = _value.data;
 
   log<DEBUG> ("Worker exit: {:s}", value);
-  // TODO terminate ();
   _worker->exit (value);
-  L4Re::Env::env ()->task ()->release_cap (obj_cap ());
-  // TODO delete this;
 
   /* With -L4_ENOREPLY no answer will be send to the worker. Keep the worker
    * thread blocked until destroyed. */

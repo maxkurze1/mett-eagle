@@ -101,14 +101,14 @@ App_model::local_detach_ds (l4_addr_t addr, unsigned long /*size*/) const
   chksys (rm->detach (pg_addr, 0), "detach temporary VMA");
 }
 
-App_model::App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
-                      L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
-                      L4Re::Util::Shared_cap<L4::Factory> const &alloc)
+App_model::App_model (L4::Cap<MettEagle::Manager_Worker> const &parent,
+                      L4::Cap<L4::Scheduler> const &scheduler,
+                      L4::Cap<L4::Factory> const &alloc)
     : _task (chkcap (L4Re::Util::make_unique_del_cap<L4::Task> (),
                            "allocating task cap")),
       _thread (chkcap (L4Re::Util::make_unique_del_cap<L4::Thread> (),
                              "allocating thread cap")),
-      _rm (chkcap (L4Re::Util::make_unique_del_cap<L4Re::Rm> (),
+      _rm (chkcap (L4Re::Util::make_unique_cap<L4Re::Rm> (),
                          "allocating region-map cap"))
 {
   chksys (alloc->create (_rm.get ()), "allocating new region map");
@@ -126,9 +126,9 @@ App_model::App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
   prog_info ()->rm        = _rm.fpage ();
   prog_info ()->parent    = parent.fpage ();
 
-  prog_info ()->mem_alloc = alloc.fpage ();
+  prog_info ()->mem_alloc = alloc.fpage (); // mem_alloc == user factory (moe ipc_gate)
   prog_info ()->log       = L4Re::Env::env ()->log ().fpage ();
-  prog_info ()->factory   = L4Re::Env::env ()->factory ().fpage ();
+  prog_info ()->factory   = L4Re::Env::env ()->factory ().fpage (); // pass own kernel factory
   prog_info ()->scheduler = scheduler.fpage ();
   prog_info ()->ldr_flags = 0; // TODO improve performance with COW??
   prog_info ()->l4re_dbg  = 0;

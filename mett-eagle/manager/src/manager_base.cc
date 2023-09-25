@@ -50,7 +50,6 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
      * before the values are set.
      */
 
-    /* IPC gate cap passed to process as parent capability */
     auto parent_ipc_cap
         = chkcap (L4Re::Util::make_shared_cap<MettEagle::Manager_Worker> (),
                   "alloc parent cap", -L4_ENOMEM);
@@ -77,14 +76,8 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
             "create limited allocator");
       }
 
-    // TODO make this cleaner ... take is necessary since the creation of a new
-    // shared_cap from the casted cap wont increase ref count
-    L4Re::Util::cap_alloc.take (parent_ipc_cap.get ());
     auto worker = std::make_shared<Worker> (
-        file,
-        L4Re::Util::Shared_cap<L4Re::Parent> (
-            L4::cap_cast<L4Re::Parent> (parent_ipc_cap.get ())),
-        _scheduler, allocator);
+        file, parent_ipc_cap.get (), _scheduler.get (), allocator.get ());
     /* create the ipc handler for started process */
     auto worker_epiface = std::make_unique<Manager_Worker_Epiface> (
         _actions, _thread, _scheduler, worker);
@@ -93,7 +86,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                 parent_ipc_cap.get (), _thread,
                 l4_umword_t (worker_epiface.get ())),
             "Failed to create gate");
-    l4_debugger_set_object_name(parent_ipc_cap.cap(), "wrkr->mngr");
+    l4_debugger_set_object_name (parent_ipc_cap.cap (), "wrkr->mngr");
     auto worker_server = std::make_unique<L4::Ipc_svr::Default_loop_hooks> ();
     worker_epiface->set_server (worker_server.get (), parent_ipc_cap.get ());
 
@@ -102,7 +95,6 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     worker->set_argv_strings ({ arg.data });
     worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=31" });
 
-
     /**
      * The corresponding 'end' measurement will be taken in the exit ipc
      * handler function
@@ -110,9 +102,9 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     worker_epiface->start = std::chrono::high_resolution_clock::now ();
 
     worker->launch ();
-    l4_debugger_set_object_name(worker->_task.cap(), "wrkr");
-    l4_debugger_set_object_name(worker->_thread .cap(), "wrkr");
-    l4_debugger_set_object_name(worker->_rm .cap(), "wrkr rm");
+    l4_debugger_set_object_name (worker->_task.cap (), "wrkr");
+    l4_debugger_set_object_name (worker->_thread.cap (), "wrkr");
+    l4_debugger_set_object_name (worker->_rm.cap (), "wrkr rm");
 
     /**
      * ========================== Server loop ==========================
@@ -146,7 +138,9 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
         msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
                            L4_IPC_NEVER); /* use compound send and receive */
       }
-    // TODO handle error exit
+    // TODO return error to parent
+    if (worker->exited_with_error ())
+      throw Loggable_exception (-L4_EFAULT, "Worker exited with error");
     exit_value = worker->get_exit_value ();
     /* check if utcb buffer is large enough -- TODO is this necessary?*/
     if (L4_UNLIKELY (exit_value.length () >= ret.length))
@@ -160,7 +154,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     /* delete smart pointers */
   }
 
-  /* set return values */
+    /* set return values */
   data = meta_data;
   memcpy (ret.data, exit_value.c_str (), exit_value.length () + 1);
   ret.length = exit_value.length () + 1;

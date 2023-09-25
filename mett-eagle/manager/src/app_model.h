@@ -8,6 +8,8 @@
  */
 #pragma once
 
+#include "manager.h"
+
 #include <l4/re/l4aux.h>
 
 #include "stack.h"
@@ -20,6 +22,7 @@
 #include <l4/re/util/unique_cap>
 
 #include <l4/liblog/loggable-exception>
+#include <l4/mett-eagle/worker>
 
 /**
  * @brief This class will provide all functions that are needed but not
@@ -46,12 +49,13 @@ struct App_model : public Ldr::Base_app_model<Stack>
   typedef Stack_base::Dataspace Dataspace;
 
   L4Re::Util::Unique_del_cap<L4::Task> _task;
-  L4Re::Util::Unique_del_cap<L4::Thread> _thread; // TODO schneller ohne del aber sicherer?
-  L4Re::Util::Unique_del_cap<L4Re::Rm> _rm;
+  L4Re::Util::Unique_del_cap<L4::Thread>
+      _thread; // TODO schneller ohne del aber sicherer?
+  L4Re::Util::Unique_cap<L4Re::Rm> _rm;
 
-  explicit App_model (L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
-                      L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
-                      L4Re::Util::Shared_cap<L4::Factory> const &alloc);
+  explicit App_model (L4::Cap<MettEagle::Manager_Worker> const &parent,
+                      L4::Cap<L4::Scheduler> const &scheduler,
+                      L4::Cap<L4::Factory> const &alloc);
 
   Dataspace alloc_ds (unsigned long size) const;
 
@@ -139,7 +143,7 @@ struct App_model : public Ldr::Base_app_model<Stack>
     l4_umword_t cpu_max;
     l4_sched_cpu_set_t cpus = l4_sched_cpu_set (0, 0);
     l4_msgtag_t t = scheduler->info (&cpu_max, &cpus);
-    if (L4_UNLIKELY(l4_error (t)))
+    if (L4_UNLIKELY (l4_error (t)))
       return t;
 
     l4_sched_param_t sp = l4_sched_param (L4_SCHED_MIN_PRIO);

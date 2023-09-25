@@ -51,14 +51,15 @@ private:
   bool _alive = true;
   std::string _exit_value;
   int _exit_error;
+  bool _error_exit = false;
 
   Const_dataspace _bin;
 
 public:
   explicit Worker (Const_dataspace bin,
-                   L4Re::Util::Shared_cap<L4Re::Parent> const &parent,
-                   L4Re::Util::Shared_cap<L4::Scheduler> const &scheduler,
-                   L4Re::Util::Shared_cap<L4::Factory> const &alloc)
+                   L4::Cap<MettEagle::Manager_Worker> const &parent,
+                   L4::Cap<L4::Scheduler> const &scheduler,
+                   L4::Cap<L4::Factory> const &alloc)
       : Remote_app_model (parent, scheduler, alloc), _bin (bin)
   {
   }
@@ -89,6 +90,13 @@ public:
   {
     _exit_error = exit_code;
     _alive = false;
+    _error_exit = true;
+  }
+
+  bool
+  exited_with_error()
+  {
+    return _error_exit;
   }
 
   /**
