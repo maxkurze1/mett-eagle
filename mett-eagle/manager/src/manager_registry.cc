@@ -15,11 +15,14 @@
 #include <l4/re/env>
 #include <l4/re/util/br_manager>
 #include <l4/re/util/object_registry>
+#include <l4/sys/cxx/ipc_epiface>
 #include <l4/sys/cxx/ipc_types>
 #include <l4/sys/scheduler>
 #include <l4/sys/thread>
 
 #include <bitset>
+#include <functional>
+#include <map>
 #include <memory>
 #include <pthread-l4.h>
 #include <pthread.h>
@@ -45,86 +48,68 @@ select_client_cpu ()
   return selected;
 }
 
+/**
+ * Mark previously used CPUs as free, after client disconnection.
+ *
+ * @arg free_bitmap  Bitmap with 1's for every cpu to mark as free
+ */
+static void
+free_client_cpu (const l4_umword_t free_bitmap)
+{
+  available_cpus |= free_bitmap;
+}
+
+/**
+ * This is an irq implementation that will be invoked if an ipc_gate connected
+ * to the client handler thread is deleted.
+ */
+class Gate_deletion_irq : public L4::Irqep_t<Gate_deletion_irq>
+{
+private:
+  /* this gate is the one that's handed out to the client and checked if it was
+   * deleted by the client */
+  L4::Cap<L4::Ipc_gate> _client_gate;
+  /* custom object cleanup method, called before pthread_exit */
+  std::function<void (void)> _cleanup;
+
+public:
+  Gate_deletion_irq (
+      L4::Cap<L4::Ipc_gate> client_gate,
+      std::function<void (void)> cleanup = [] {})
+      : _client_gate (client_gate), _cleanup (cleanup)
+  {
+  }
+
+  void
+  handle_irq ()
+  {
+    /* check if the deleted gate is the one of the client, and not one of a
+     * worker process */
+    if (L4_LIKELY (!_client_gate.validate ().label () == 0))
+      return;
+
+    log<DEBUG> ("deleting client thread");
+
+    _cleanup ();
+
+    delete this;
+
+    /* the handler will be called by the thread that should be deleted  *
+     * thus it's possible to use pthread_exit instead of pthread_cancel */
+
+    // TODO somehow the l4::thread-obj is not deleted??
+    pthread_exit (nullptr);
+
+    throw Loggable_exception (-L4_EFAULT, "Pthread exit failed");
+  }
+};
+
 long
 Manager_Registry_Epiface::op_register_client (
     MettEagle::Manager_Registry::Rights,
     L4::Ipc::Cap<MettEagle::Manager_Client> &manager_ipc_gate)
 {
   log<DEBUG> ("Registering client");
-
-  /**
-   * This function will create a new thread (just like pthreads) that is
-   * responsible for handling this particular client.
-   */
-
-#if 0
-    /**
-     * To have a more fine grained control over the thread, no library (e.g.
-     * pthreads) will be used.
-     *
-     * The thread will get an own Scheduler to ensure that it will run on a
-     * specific core.
-     */
-    auto env = const_cast<L4Re::Env *> (L4Re::Env::env ());
-    // get utcb for thread
-
-    // l4_utcb_tcr_u(u)->free_marker; ?? == 0 => usable
-
-    // allocate utcb space
-    l4_addr_t kernel_user_mem = 0;
-    chksys (env->rm ()->reserve_area (&kernel_user_mem, L4_PAGESIZE,
-                                      L4Re::Rm::F::Reserved
-                                          | L4Re::Rm::F::Search_addr),
-            "reserve area for utcb");
-
-    chksys (env->task ()->add_ku_mem (
-                l4_fpage (kernel_user_mem, L4_PAGESHIFT, L4_FPAGE_RW)),
-            "get kernel user mem", [&] (l4_msgtag_t const &) {
-              env->rm ()->free_area (kernel_user_mem);
-            });
-
-    auto client_thread = L4Re::Util::cap_alloc.alloc<L4::Thread> ();
-    chksys (env->factory ()->create (client_thread), "create client thread");
-
-    L4::Thread::Attr attr;
-    attr.pager (env->rm ());
-    attr.exc_handler (env->rm ());
-    attr.bind ((l4_utcb_t *)env->first_free_utcb (), env->task ());
-
-    env->first_free_utcb (env->first_free_utcb () + L4_UTCB_OFFSET);
-
-    int test = 4;
-    // L4Re::LibLog::chksys (client_thread->control (attr), "setup app
-    // thread %d", test, [](const l4_msgtag_t &tag) -> void {
-    //   log<DEBUG>("called callback");
-    // });
-
-    auto stack_cap = chkcap (
-        L4Re::Util::cap_alloc.alloc<L4Re::Dataspace> (), "alloc cap");
-
-    // alloc single page for the thread stack
-    int stack_size = 4096;
-    chksys (env->mem_alloc ()->alloc (stack_size, stack_cap));
-
-    l4_addr_t stack_addr;
-    chksys (
-        env->rm ()->attach (&stack_addr, stack_size,
-                            L4Re::Rm::F::Search_addr | L4Re::Rm::F::RW,
-                            L4::Ipc::make_cap_rw (stack_cap), L4_STACK_ALIGN),
-        "attaching stack vma");
-
-    chksys (
-        client_thread->ex_regs (
-            (l4_addr_t)client_function /* some address */,
-            l4_align_stack_for_direct_fncall ((unsigned long)stack_addr), 0),
-        "start app thread");
-
-    // run thread
-    log<DEBUG> ("running test thread");
-
-    chksys (env->scheduler ()->run_thread (
-        client_thread, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
-#endif
 
   /** scheduler with only one selected cpu enabled for the new thread */
   auto sched_cap = L4Re::Util::make_shared_cap<L4::Scheduler> ();
@@ -144,7 +129,7 @@ Manager_Registry_Epiface::op_register_client (
                        sched_cap.get ())
                    << limit << offset << bitmap),
       "Failed to create scheduler");
-  l4_debugger_set_object_name(sched_cap.cap(), "mngr clnt");
+  l4_debugger_set_object_name (sched_cap.cap (), "mngr clnt shed");
 
   pthread_t pthread;
   pthread_attr_t attr;
@@ -186,15 +171,7 @@ Manager_Registry_Epiface::op_register_client (
 
         log<INFO> ("Start client ipc server");
 
-        /**
-         * TODO end loop and exit thread after client disconnect to free
-         * resources again
-         *
-         * pthread_cancel - probably not
-         * pthread_exit ?? - should be the answer
-         *
-         * is it possible to get notified if passed ipc_gate was deleted
-         */
+        /* loop and whole client will be terminated by deletion irq */
         client_server->internal_loop (
             Exc_log_dispatch<L4Re::Util::Object_registry &> (
                 *client_server->registry ()),
@@ -207,7 +184,7 @@ Manager_Registry_Epiface::op_register_client (
       log<ERROR> ("failed to create thread");
     }
   auto thread_cap = L4::Cap<L4::Thread> (pthread_l4_cap (pthread));
-  l4_debugger_set_object_name(thread_cap.cap(), "mngr clnt");
+  l4_debugger_set_object_name (thread_cap.cap (), "mngr clnt");
 
   pthread_attr_destroy (&attr);
 
@@ -215,13 +192,12 @@ Manager_Registry_Epiface::op_register_client (
       = new L4Re::Util::Registry_server<L4Re::Util::Br_manager_hooks> (
           thread_cap, L4Re::Env::env ()->factory ());
   /* create new object handling the requests of this client */
-  /* TODO handle deallocation */
   auto epiface = new Manager_Client_Epiface (thread_cap, sched_cap);
 
   /* register the object in the server loop. This will create the        *
    * capability for the object and inform the server to route IPC there. */
   L4::Cap<void> cap = client_server->registry ()->register_obj (epiface);
-  l4_debugger_set_object_name(cap.cap(), "clnt->mngr");
+  l4_debugger_set_object_name (cap.cap (), "clnt->mngr");
   if (L4_UNLIKELY (not cap.is_valid ()))
     {
       client_server->registry ()->unregister_obj (epiface);
@@ -234,8 +210,27 @@ Manager_Registry_Epiface::op_register_client (
           canceled);
     }
 
-  chksys (sched_cap->run_thread (
-      thread_cap, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
+  /*
+   * The in kernel ref-count of the ipc_gate will be decreased in order to get
+   * notified if the client deletes its pointer to the gate
+   */
+  chksys (epiface->obj_cap ()->dec_refcnt (1), "dec_refcnt of client epiface");
+  /* register IRQ on gate_deletion */
+  auto deletion_irq
+      = new Gate_deletion_irq (L4::cap_cast<L4::Ipc_gate> (cap), [=] {
+          /* this will be called when the client deletes his gate*/
+          delete epiface;
+          delete client_server;
+
+          /* free resources */
+          free_client_cpu (bitmap);
+        });
+  chkcap (client_server->registry ()->register_irq_obj (deletion_irq),
+          "gate deletion irq");
+  thread_cap->register_del_irq (deletion_irq->obj_cap ());
+
+  chksys (sched_cap->run_thread (thread_cap,
+                                 l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
 
   /*
    * Note: The thread might start the server loop after the ipc call returned

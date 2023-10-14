@@ -93,6 +93,8 @@ struct Manager_Base
    * @return  -L4_EMSGTOOLONG
    *            if the receive buffer of the caller is not large enough to hold
    *            the message (with null-terminator)
+   * @return  -L4_EFAULT
+   *            in case the worker processes exited with an error
    */
   l4_msgtag_t
   action_invoke (L4::Ipc::String<> name, L4::Ipc::String<> arg,
@@ -130,7 +132,7 @@ struct Manager_Base
     /* allocate client receive buffer with max message length */
     char buffer[L4::Ipc::Msg::Mr_bytes];
     L4::Ipc::Array<char> arr (sizeof (buffer), buffer);
-    l4_msgtag_t mt
+    auto mt
         = action_invoke_t::call (c (), name, arg, arr, cfg, data ?: &_data);
     /* ret will always be 0 terminated - if not, it was truncated */
     if (L4_UNLIKELY (arr.data[arr.length - 1] != 0))

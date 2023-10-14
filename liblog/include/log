@@ -247,7 +247,7 @@ template <typename Severity,
           typename Silencer = SilenceByEnv, // TODO NoSilence as default?
           typename Synchronizer
           = SemaphoreSync, // TODO NoSync as default?
-          typename FormatSpecifier = CleanFormat, typename... Args>
+          typename FormatSpecifier = VerboseFormat, typename... Args>
 inline static void
 log (ArgWithLocation<const char *> format, Args &&...args)
 {

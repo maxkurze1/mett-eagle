@@ -20,6 +20,7 @@
 #include <l4/re/util/cap_alloc>
 #include <l4/re/error_helper>
 #include <l4/re/util/env_ns>
+#include <l4/re/util/unique_cap>
 
 namespace L4Re
 {
@@ -37,7 +38,7 @@ namespace MettEagle
  *                            by ned on startup
  * @return MettEagle::Manager Capability to a Manager Ipc_Gate
  */
-inline static L4::Cap<L4Re::MettEagle::Manager_Client>
+inline static L4Re::Util::Unique_cap<L4Re::MettEagle::Manager_Client>
 getManager (const char *const cap_name) // TODO support custom cap_alloc
 {
   /* get the initial ipc gate of the MettEagle manager to register ourselves */
@@ -46,10 +47,10 @@ getManager (const char *const cap_name) // TODO support custom cap_alloc
       "Couldn't get manager_registry capability");
   /* cap to receive new ipc gate from manager */
   auto manager_cap = L4Re::chkcap (
-      L4Re::Util::cap_alloc.alloc<MettEagle::Manager_Client> (),
+      L4Re::Util::make_unique_cap<MettEagle::Manager_Client> (),
       "allocate manager capability");
   /* register ipc call, see MettEagle::Manager_Registry */
-  L4Re::chksys (manager_registry->register_client (manager_cap),
+  L4Re::chksys (manager_registry->register_client (manager_cap.get()),
                 "register_client");
   return manager_cap;
 }

@@ -80,9 +80,9 @@ public:
 
   /**
    * @brief Terminate with exit code
-   * 
+   *
    * All capabilities should be unmapped
-   * 
+   *
    * Note: This method should only be invoked on failure
    */
   void
@@ -94,7 +94,7 @@ public:
   }
 
   bool
-  exited_with_error()
+  exited_with_error ()
   {
     return _error_exit;
   }
@@ -129,8 +129,8 @@ public:
     for (auto init_cap : _initial_capabilities)
       {
         auto name = init_cap.name.c_str ();
-        _stack.push (
-            l4re_env_cap_entry_t (name, get_initial_cap (name, &start), init_cap.flags));
+        _stack.push (l4re_env_cap_entry_t (
+            name, get_initial_cap (name, &start), init_cap.flags));
       }
     return start;
   }
@@ -138,7 +138,7 @@ public:
   /**
    * This method transfers the selected capabilities of the current process
    * to the new process (task) which capabilities are transferred is configured
-   * with TODO add_capability()
+   * with ::add_inital_capability()
    */
   void
   map_initial_caps (L4::Cap<L4::Task> task, l4_cap_idx_t start)
@@ -298,7 +298,7 @@ public:
         log<ERROR> ("Capability name '{}' too long -- ignored", name);
         return;
       }
-    _initial_capabilities.push_back ({cap, name, rights, flags});
+    _initial_capabilities.push_back ({ cap, name, rights, flags });
   }
 
   /**

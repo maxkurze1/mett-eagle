@@ -35,5 +35,9 @@ public:
 
   long op_action_create (MettEagle::Manager_Client::Rights,
                          const L4::Ipc::String_in_buf<> &_name,
-                         L4::Ipc::Snd_fpage file);
+                         L4::Ipc::Snd_fpage file,
+                         MettEagle::Language lang);
+
+  long op_action_delete (MettEagle::Manager_Client::Rights,
+                         const L4::Ipc::String_in_buf<> &_name);
 };

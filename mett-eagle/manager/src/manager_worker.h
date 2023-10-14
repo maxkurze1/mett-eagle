@@ -8,7 +8,7 @@
 /**
  * @file
  * Epiface declaration for the worker interface
- * 
+ *
  * @see <l4/mett-eagle/worker>
  */
 
@@ -20,11 +20,11 @@
 
 #include <l4/mett-eagle/worker>
 
-#include <l4/sys/cxx/ipc_epiface>
 #include <l4/re/util/shared_cap>
-#include <l4/sys/thread>
-#include <l4/sys/scheduler>
+#include <l4/sys/cxx/ipc_epiface>
 #include <l4/sys/cxx/ipc_types>
+#include <l4/sys/scheduler>
+#include <l4/sys/thread>
 
 #include <chrono>
 
@@ -47,9 +47,7 @@ public:
 
 public:
   Manager_Worker_Epiface (
-      std::shared_ptr<
-          std::map<std::string, L4Re::Util::Shared_cap<L4Re::Dataspace> > >
-          actions,
+      std::shared_ptr<std::map<std::string, Action> > actions,
       L4::Cap<L4::Thread> thread,
       L4Re::Util::Shared_cap<L4::Scheduler> scheduler,
       std::shared_ptr<Worker> worker);
@@ -68,10 +66,8 @@ public:
    *
    * @see l4re-core/uclibc/lib/uclibc/_exit.cc
    */
-  long
-  op_signal (L4Re::Parent::Rights, unsigned long sig, unsigned long val);
+  long op_signal (L4Re::Parent::Rights, unsigned long sig, unsigned long val);
 
-  long
-  op_exit (MettEagle::Manager_Worker::Rights,
-           const L4::Ipc::String_in_buf<> &_value);
+  long op_exit (MettEagle::Manager_Worker::Rights,
+                const L4::Ipc::String_in_buf<> &_value);
 };

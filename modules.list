@@ -2,7 +2,7 @@ modaddr 0x01100000
 
 entry mett-eagle
     kernel fiasco -serial_esc
-    roottask moe rom/mett-eagle.cfg
+    roottask moe rom/mett-eagle.cfg $CLIENT_ARGS
     module l4re
     module ned
     module mett-eagle.cfg
@@ -11,9 +11,11 @@ entry mett-eagle
     module function2
     module mett-eagle
     module mett-eagle-client
+    module mett-eagle-client/python/function.py
+    module mett-eagle-client/python/function2.py
+    module python-faas2.7
+    module python-faas3
 
-entry ignore
-    module python-faas
     module libstdc++.so
     module libld-l4.so
     module libc_be_sig.so

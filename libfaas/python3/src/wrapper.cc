@@ -25,18 +25,19 @@ using namespace L4Re::LibLog;
 using L4Re::LibLog::Loggable_exception;
 
 static void
-invoke_python_main ()
+invoke_python_main (const char *filename)
 {
   PyObject *pModule, *pFunc;
   PyObject *pArgs, *pValue;
-
   PyConfig config;
 
+  // PyConfig_InitIsolatedConfig(&config);
   PyConfig_InitPythonConfig (&config);
-  config.use_hash_seed = 1;
+  config.use_hash_seed = true;
   config.hash_seed = 0;
-  config.platlibdir = (wchar_t *)L"/rom";
-  // config.site_import = 0;
+  config.platlibdir = (wchar_t *)L"rom";
+  config.run_filename = (wchar_t *)L"function";
+  config.site_import = false;
 
   Py_InitializeFromConfig (&config);
   // pName = PyString_FromString ("rom/test.py");
@@ -47,11 +48,16 @@ invoke_python_main ()
 
   log<DEBUG> ("Added module");
 
-  PyRun_SimpleString ("def test_function(str):\n  return \"some answer\"");
-  PyRun_SimpleString ("import sys;"
-                      "print(\"hello world\", file=sys.stderr)");
+  // PyRun_SimpleString ("def test_function(str):\n  return \"some answer\"");
+  PyRun_SimpleString ("import sys"
+                      "print(\"hello world\")");
 
   log<DEBUG> ("Ran string");
+
+  auto file = fopen(filename, "r");
+  PyRun_SimpleFileExFlags(file, filename, true, NULL);
+
+  log<DEBUG> ("Ran file");
 
   if (pModule != NULL)
     {
@@ -117,8 +123,11 @@ try
                        argc);
 
     log<DEBUG> ("Trying to invoke python");
+
+    L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dataspace>("function"), "no dataspace cap 'function' passed");
+
     /* actual call to the faas function */
-    invoke_python_main ();
+    invoke_python_main ("function");
 
     /* the default _exit implementation can only return an integer *
      * to pass a string the custom manager->exit must be used.     */

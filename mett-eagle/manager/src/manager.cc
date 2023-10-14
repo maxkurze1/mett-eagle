@@ -48,6 +48,9 @@ try
     chksys (L4Re::Env::env ()->scheduler ()->info (&cpu_max, &cpus),
                   "failed to query scheduler info");
 
+    /* reserve last cpu for all clients and manager registry thread */
+    cpus.map &= ~1LL;
+
     /* update global bitmap */
     available_cpus = cpus.map;
 

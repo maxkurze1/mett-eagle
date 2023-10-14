@@ -18,6 +18,7 @@
 #include <l4/libloader/remote_app_model>
 #include <l4/liblog/log>
 #include <l4/re/util/debug>
+#include <l4/re/util/env_ns>
 #include <l4/re/util/shared_cap>
 #include <l4/re/util/unique_cap>
 
@@ -50,7 +51,7 @@ struct App_model : public Ldr::Base_app_model<Stack>
 
   L4Re::Util::Unique_del_cap<L4::Task> _task;
   L4Re::Util::Unique_del_cap<L4::Thread>
-      _thread; // TODO schneller ohne del aber sicherer?
+      _thread; // TODO faster without 'del', but is it safe?
   L4Re::Util::Unique_cap<L4Re::Rm> _rm;
 
   explicit App_model (L4::Cap<MettEagle::Manager_Worker> const &parent,
@@ -59,12 +60,13 @@ struct App_model : public Ldr::Base_app_model<Stack>
 
   Dataspace alloc_ds (unsigned long size) const;
 
-  /* this function is not used -- all binaries are passed as Const_dataspace */
-  Const_dataspace
-  open_file (char const *)
+  /* this function is necessary for loading dynamic libraries */
+  static Const_dataspace
+  open_file (char const *file)
   {
-    throw L4Re::LibLog::Loggable_exception (-L4_EINVAL,
-                                            "open_file is not implemented");
+    return L4Re::Util::Shared_cap<L4Re::Dataspace> (
+        chkcap (L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (file),
+                "failed to open file"));
   }
 
   /* needed by Remote_app_model */

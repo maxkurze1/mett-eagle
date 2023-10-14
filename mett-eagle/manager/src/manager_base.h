@@ -19,6 +19,7 @@
 #include "manager.h"
 
 #include <l4/mett-eagle/base>
+#include <l4/mett-eagle/client>
 
 #include <l4/re/dataspace>
 #include <l4/re/util/shared_cap>
@@ -32,6 +33,12 @@
 #include <memory>
 #include <string>
 
+struct Action
+{
+  L4Re::Util::Shared_cap<L4Re::Dataspace> ds;
+  MettEagle::Language lang;
+};
+
 struct Manager_Base_Epiface : L4::Epiface_t0<MettEagle::Manager_Base>
 {
 protected:
@@ -44,9 +51,7 @@ protected:
    * It is implemented as a shared_ptr since it will be referenced by client
    * epifaces and worker epifaces
    */
-  std::shared_ptr<
-      std::map<std::string, L4Re::Util::Shared_cap<L4Re::Dataspace> > >
-      _actions;
+  std::shared_ptr<std::map<std::string, Action> > _actions;
 
   /**
    * @brief The client specific thread that will execute all actions

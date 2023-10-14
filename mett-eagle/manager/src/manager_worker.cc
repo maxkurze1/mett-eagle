@@ -9,9 +9,7 @@
 #include "manager_worker.h"
 
 Manager_Worker_Epiface::Manager_Worker_Epiface (
-    std::shared_ptr<
-        std::map<std::string, L4Re::Util::Shared_cap<L4Re::Dataspace> > >
-        actions,
+    std::shared_ptr<std::map<std::string, Action> > actions,
     L4::Cap<L4::Thread> thread,
     L4Re::Util::Shared_cap<L4::Scheduler> scheduler,
     std::shared_ptr<Worker> worker)

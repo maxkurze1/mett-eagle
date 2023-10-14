@@ -1,8 +1,8 @@
 PKGDIR  ?= ../..
 L4DIR   ?= $(PKGDIR)/../../..
 
-TARGET   = python-faas
-MODE     = shared
+TARGET   = python-faas3
+# MODE     = shared
 SRC_CC   = $(patsubst $(SRC_DIR)/%,%,$(wildcard $(SRC_DIR)/*.cc))
 
 REQUIRES_LIBS += libstdc++ libfmt libpython3

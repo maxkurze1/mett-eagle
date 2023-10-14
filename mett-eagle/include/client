@@ -33,11 +33,22 @@
 #include <l4/liblog/loggable-exception>
 
 #include <string>
+#include <l4/sys/l4int.h>
 
 namespace L4Re
 {
 namespace MettEagle
 {
+
+/**
+ * These values can be used to specify the language that an action was written
+ * in
+ */
+enum Language : l4_uint64_t
+{
+  BINARY = 0, /* this value shall be used for already compiled binaries */
+  PYTHON = 1, /* at the moment, only a 2.7 interpreter is supported */
+};
 
 /**
  * @brief Interface provided to clients
@@ -53,7 +64,7 @@ struct Manager_Client
     : L4::Kobject_t<Manager_Client, Manager_Base, PROTO_MANAGER_CLIENT,
                     L4::Type_info::Demand_t<1> >
 // It is necessary to declare the Demand_t<1> to receive the file capabilities.
-// Tt is also necessary to use the Br_manager to allocate the needed receive
+// It is also necessary to use a Br_manager to allocate the needed receive
 // capability
 {
   /**
@@ -70,9 +81,10 @@ struct Manager_Client
    * @return          -L4_EEXIST if name is already in use
    */
   l4_msgtag_t
-  action_create (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file)
+  action_create (L4::Ipc::String<> name, L4::Ipc::Cap<L4Re::Dataspace> file,
+                 Language lang = Language::BINARY)
   {
-    return action_create_t::call (c (), name, file);
+    return action_create_t::call (c (), name, file, lang);
   }
 
   /**
@@ -95,20 +107,39 @@ struct Manager_Client
    * @return          -L4_EEXIST if name is already in use
    */
   l4_msgtag_t
-  action_create (L4::Ipc::String<> name, const char *const pathname)
+  action_create (L4::Ipc::String<> name, const char *const pathname,
+                 Language lang = Language::BINARY)
   {
     auto file = L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (pathname);
     if (L4_UNLIKELY (not file.is_valid ()))
       throw LibLog::Loggable_exception (-L4_EINVAL,
                                         "Couldn't find file '{:s}'", pathname);
-    return action_create_t::call (c (), name, file);
+    return action_create_t::call (c (), name, file, lang);
+  }
+
+  /**
+   * @brief Delete an 'action' (= faas function)
+   *
+   * This will delete a previously defined action, effectively undoing the
+   * action create.
+   *
+   * @param[in] name  Name that will identify the action
+   *
+   * @return          L4_EOK on success
+   */
+  l4_msgtag_t
+  action_delete (L4::Ipc::String<> name)
+  {
+    return action_delete_t::call (c (), name);
   }
 
   L4_INLINE_RPC_NF (l4_msgtag_t, action_create,
                     (L4::Ipc::String<> name,
-                     L4::Ipc::Cap<L4Re::Dataspace> file));
+                     L4::Ipc::Cap<L4Re::Dataspace> file, Language lang));
 
-  typedef L4::Typeid::Rpcs<action_create_t> Rpcs;
+  L4_INLINE_RPC_NF (l4_msgtag_t, action_delete, (L4::Ipc::String<> name));
+
+  typedef L4::Typeid::Rpcs<action_create_t, action_delete_t> Rpcs;
 };
 
 } // namespace MettEagle

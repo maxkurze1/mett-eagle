@@ -10,6 +10,7 @@
 #include "manager_worker.h"
 #include "worker.h"
 
+#include <l4/re/util/env_ns>
 #include <l4/sys/cxx/ipc_server_loop>
 
 #include <l4/sys/debugger.h>
@@ -34,8 +35,8 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
 
   /* cap can be unmapped anytime ... maybe we should create a local copy on
    * action create?? ... TODO add try catch or some error handling */
-  auto file = (*_actions)[name];
-  if (L4_UNLIKELY (not file.validate ().label ()))
+  auto action = (*_actions)[name];
+  if (L4_UNLIKELY (not action.ds.validate ().label ()))
     throw Loggable_exception (-L4_EINVAL, "dataspace invalid");
 
   // TODO extract to own function
@@ -76,8 +77,28 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
             "create limited allocator");
       }
 
+    L4Re::Util::Shared_cap<L4Re::Dataspace> worker_ds;
+    switch (action.lang)
+      {
+      case MettEagle::Language::BINARY:
+        /* in case the received dataspace already contains the binary, it is
+         * started directly */
+        worker_ds = action.ds;
+        break;
+        /* if it need a runtime the correct one should be selected */
+      case MettEagle::Language::PYTHON:
+        worker_ds = L4Re::Util::Shared_cap<L4Re::Dataspace> (
+            L4Re::Util::Env_ns{}.query<L4Re::Dataspace> (
+                "rom/python-faas2.7")); // TODO probably not safe to put into a
+                                        // shared cap
+        if (L4_UNLIKELY (not worker_ds.is_valid ()))
+          throw Loggable_exception (-L4_EINVAL,
+                                    "Couldn't find file 'rom/python-faas2.7'");
+        break;
+      }
+
     auto worker = std::make_shared<Worker> (
-        file, parent_ipc_cap.get (), _scheduler.get (), allocator.get ());
+        worker_ds, parent_ipc_cap.get (), _scheduler.get (), allocator.get ());
     /* create the ipc handler for started process */
     auto worker_epiface = std::make_unique<Manager_Worker_Epiface> (
         _actions, _thread, _scheduler, worker);
@@ -94,6 +115,12 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     /* pass data as first argument string */
     worker->set_argv_strings ({ arg.data });
     worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=31" });
+
+    worker->add_initial_capability (
+        L4Re::Env::env ()->get_cap<L4Re::Namespace> ("rom"), "rom", L4_cap_fpage_rights::L4_CAP_FPAGE_RW);
+    if (action.lang != MettEagle::Language::BINARY)
+      worker->add_initial_capability (action.ds.get (), "function",
+                                      L4_cap_fpage_rights::L4_CAP_FPAGE_RW);
 
     /**
      * The corresponding 'end' measurement will be taken in the exit ipc
@@ -138,7 +165,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
         msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
                            L4_IPC_NEVER); /* use compound send and receive */
       }
-    // TODO return error to parent
+    // TODO return error code to parent
     if (worker->exited_with_error ())
       throw Loggable_exception (-L4_EFAULT, "Worker exited with error");
     exit_value = worker->get_exit_value ();
@@ -154,7 +181,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     /* delete smart pointers */
   }
 
-    /* set return values */
+  /* set return values */
   data = meta_data;
   memcpy (ret.data, exit_value.c_str (), exit_value.length () + 1);
   ret.length = exit_value.length () + 1;

@@ -10,7 +10,7 @@
  * @return std::string The measured runtime as a string
  */
 
-const int COUNT = 1'000'000; // 100M ~ 4seconds
+const int COUNT = 25'000'000; // 100M ~ 4seconds (in qemu)
 
 // double sq_arr[COUNT];
 volatile double sq_arr;
