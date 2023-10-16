@@ -16,7 +16,7 @@ const int COUNT = 25'000'000; // 100M ~ 4seconds (in qemu)
 volatile double sq_arr;
 
 std::string
-Main (std::string args)
+Main (std::string /* args */)
 {
   auto start = std::chrono::high_resolution_clock::now ();
 

@@ -51,7 +51,7 @@ struct Manager_Worker : L4::Kobject_2t<Manager_Worker, Manager_Base,
    * @param[in] value  Exit value of the serverless function
    * @return           L4_EOK on success or a negative error value
    */
-  L4_INLINE_RPC (l4_msgtag_t, exit, (L4::Ipc::String<> value));
+  L4_INLINE_RPC (l4_msgtag_t, exit, (L4::Ipc::String<> value, Worker_Metadata data));
 
   typedef L4::Typeid::Rpcs<exit_t> Rpcs;
 };

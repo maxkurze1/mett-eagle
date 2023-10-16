@@ -88,7 +88,7 @@ public:
     if (L4_LIKELY (!_client_gate.validate ().label () == 0))
       return;
 
-    log<DEBUG> ("deleting client thread");
+    // log<DEBUG> ("deleting client thread");
 
     _cleanup ();
 
@@ -109,7 +109,7 @@ Manager_Registry_Epiface::op_register_client (
     MettEagle::Manager_Registry::Rights,
     L4::Ipc::Cap<MettEagle::Manager_Client> &manager_ipc_gate)
 {
-  log<DEBUG> ("Registering client");
+  // log<DEBUG> ("Registering client");
 
   /** scheduler with only one selected cpu enabled for the new thread */
   auto sched_cap = L4Re::Util::make_shared_cap<L4::Scheduler> ();
@@ -122,14 +122,14 @@ Manager_Registry_Epiface::op_register_client (
    * client.
    */
   l4_umword_t bitmap = select_client_cpu ();
-  log<DEBUG> ("Selected cpu {:#b}", bitmap);
+  // log<DEBUG> ("Selected cpu {:#b}", bitmap);
 
   chksys (
       l4_msgtag_t (L4Re::Env::env ()->user_factory ()->create<L4::Scheduler> (
                        sched_cap.get ())
                    << limit << offset << bitmap),
       "Failed to create scheduler");
-  l4_debugger_set_object_name (sched_cap.cap (), "mngr clnt shed");
+  // l4_debugger_set_object_name (sched_cap.cap (), "mngr clnt shed");
 
   pthread_t pthread;
   pthread_attr_t attr;
@@ -169,7 +169,7 @@ Manager_Registry_Epiface::op_register_client (
         /* free the allocated pointer again - do *not* free the object */
         delete arg;
 
-        log<INFO> ("Start client ipc server");
+        // log<INFO> ("Start client ipc server");
 
         /* loop and whole client will be terminated by deletion irq */
         client_server->internal_loop (
@@ -184,7 +184,7 @@ Manager_Registry_Epiface::op_register_client (
       log<ERROR> ("failed to create thread");
     }
   auto thread_cap = L4::Cap<L4::Thread> (pthread_l4_cap (pthread));
-  l4_debugger_set_object_name (thread_cap.cap (), "mngr clnt");
+  // l4_debugger_set_object_name (thread_cap.cap (), "mngr clnt");
 
   pthread_attr_destroy (&attr);
 
@@ -197,7 +197,7 @@ Manager_Registry_Epiface::op_register_client (
   /* register the object in the server loop. This will create the        *
    * capability for the object and inform the server to route IPC there. */
   L4::Cap<void> cap = client_server->registry ()->register_obj (epiface);
-  l4_debugger_set_object_name (cap.cap (), "clnt->mngr");
+  // l4_debugger_set_object_name (cap.cap (), "clnt->mngr");
   if (L4_UNLIKELY (not cap.is_valid ()))
     {
       client_server->registry ()->unregister_obj (epiface);

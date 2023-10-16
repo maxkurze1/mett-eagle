@@ -37,8 +37,8 @@ int
 main (const int /* argc */, const char *const /* argv */[])
 try
   {
-    l4_debugger_set_object_name(L4Re::Env::env()->task().cap(), "mngr");
-    l4_debugger_set_object_name(L4Re::Env::env()->main_thread().cap(), "mngr reg");
+    // l4_debugger_set_object_name(L4Re::Env::env()->task().cap(), "mngr");
+    // l4_debugger_set_object_name(L4Re::Env::env()->main_thread().cap(), "mngr reg");
 
     /**
      * Query available cpu-set which can be distributed to clients
@@ -49,13 +49,13 @@ try
                   "failed to query scheduler info");
 
     /* reserve last cpu for all clients and manager registry thread */
-    cpus.map &= ~1LL;
+    // cpus.map &= ~1LL;
 
     /* update global bitmap */
     available_cpus = cpus.map;
 
-    log<INFO> ("Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
-               cpus.map, cpu_max, available_cpus.count (), cpu_max);
+    // log<INFO> ("Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
+              //  cpus.map, cpu_max, available_cpus.count (), cpu_max);
 
     /*
      * Associate the 'server' endpoint that was already
@@ -67,7 +67,7 @@ try
                   "Couldn't register service, is there a 'server' in "
                   "the caps table?");
 
-    log<INFO> ("Starting Mett-Eagle registry server!");
+    // log<INFO> ("Starting Mett-Eagle registry server!");
 
     // start server loop -- loop will not return!
     // started with custom dispatch to log errors

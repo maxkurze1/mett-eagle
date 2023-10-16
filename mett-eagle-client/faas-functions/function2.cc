@@ -14,13 +14,13 @@
 using namespace L4Re::LibLog;
 
 std::string
-Main (std::string args)
+Main (std::string /* args */)
 {
-  log<INFO> ("Hello from function2, param: '{}'", args);
+  // log<INFO> ("Hello from function2, param: '{}'", args);
 
   std::string ans = L4Re::Faas::invoke ("function1", "50"); // 50 milliseconds
 
-  log<INFO> ("Invoked function1: '{}'", ans);
+  // log<INFO> ("Invoked function1: '{}'", ans);
 
   return "function2 long name";
 }

@@ -54,18 +54,37 @@ struct Config
 };
 
 /**
+ * @brief The metadata that is measured by the worker
+ *
+ * This struct is used to transmit the measured metadata from the worker to the
+ * manager
+ *
+ * It is a subset of the data that will be send to the client.
+ */
+struct Worker_Metadata
+{
+  /** measured just before runtime setup */
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_runtime;
+  /** measured just before function invocation (after runtime setup) */
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_function;
+  /** measure just after function finishes (before runtime destruction) */
+  std::chrono::time_point<std::chrono::high_resolution_clock> end_function;
+  /** measured just after runtime destruction */
+  std::chrono::time_point<std::chrono::high_resolution_clock> end_runtime;
+};
+
+/**
  * This data will be measured internally by the manager and can be
  * returned from every invocation
+ *
+ * @note Fields are ordered in chronological order
  */
-struct Metadata
+struct Metadata : public Worker_Metadata
 {
-  // start will be measured as short as possible before the creation of the
-  // worker process
-  std::chrono::time_point<std::chrono::high_resolution_clock> start;
-  // end will be measured shortly after the worker exit was received
-  // TODO maybe better to measure after worker has been destructed -- for
-  // symmetry
-  std::chrono::time_point<std::chrono::high_resolution_clock> end;
+  /* measured just before the worker process is created */
+  std::chrono::time_point<std::chrono::high_resolution_clock> start_worker;
+  /* measure just after the worker process is destroyed */
+  std::chrono::time_point<std::chrono::high_resolution_clock> end_worker;
 };
 
 /**

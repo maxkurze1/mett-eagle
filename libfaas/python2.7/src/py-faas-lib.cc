@@ -34,8 +34,8 @@
  * import faas
  * 
  * def main(arg):
- *   ret = faas.action_invoke("","")
- * 
+ *   ret = faas.action_invoke(name="function2", arg="hey from fn1");
+ *   return ret;
  * @endcode
  *
  * @param self

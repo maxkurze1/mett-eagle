@@ -13,6 +13,7 @@
 #include <l4/liblog/log>
 #include <l4/liblog/loggable-exception>
 
+#include <l4/mett-eagle/worker>
 #include <l4/re/env>
 #include <l4/re/error_helper>
 
@@ -26,19 +27,27 @@
 using namespace L4Re::LibLog;
 using L4Re::LibLog::Loggable_exception;
 
+/* timing data of the worker */
+L4Re::MettEagle::Worker_Metadata metadata;
+
 static const char *
 invoke_python_main (const char *filename, std::string arg)
 {
+  Py_NoSiteFlag = 1; /* do not try to import 'site' */
   Py_Initialize ();
   /* make the faas library available inside python  */
-  Py_InitModule("faas", faas_methods);
-
-  auto pModule = PyImport_AddModule ("__main__");
+  Py_InitModule ("faas", faas_methods);
 
   auto file = fopen (filename, "r");
+
+  metadata.start_function = std::chrono::high_resolution_clock::now ();
+
+  auto pModule = PyImport_AddModule ("__main__");
   PyRun_SimpleFileEx (file, filename, true);
 
-  log<DEBUG> ("Added python modules");
+  metadata.end_function = std::chrono::high_resolution_clock::now ();
+
+  // log<DEBUG> ("Added python modules");
 
   if (L4_UNLIKELY (pModule == NULL))
     throw Loggable_exception (-L4_EINVAL,
@@ -60,7 +69,7 @@ invoke_python_main (const char *filename, std::string arg)
         -L4_EINVAL, "Failed to convert std::string to python string");
   PyTuple_SetItem (pArgs, 0, pValue);
 
-  log<DEBUG> ("Calling python function");
+  // log<DEBUG> ("Calling python function");
   /* perform the actual function call */
   pValue = PyObject_CallObject (pFunc, pArgs);
   Py_DECREF (pArgs); /* arguments are no longer needed */
@@ -70,18 +79,18 @@ invoke_python_main (const char *filename, std::string arg)
   if (pValue == NULL)
     ret = "";
   else
-    ret = PyString_AsString(pValue);
+    ret = PyString_AsString (pValue);
 
-  log<DEBUG> ("got result '{:s}'", ret);
-  
+  // log<DEBUG> ("got result '{:s}'", ret);
+
   /* values no longer needed */
   Py_XDECREF (pValue); /* XDECREF -> value may be NULL */
   Py_DECREF (pFunc);
   Py_DECREF (pModule);
   // Py_Finalize (); todo 'No signal handler found' error
 
-  log<DEBUG> ("returning");
-  
+  // log<DEBUG> ("returning");
+
   return ret;
 }
 
@@ -93,6 +102,7 @@ main (int argc, const char *argv[])
 try
   {
     (void)argv;
+
     /* there has to be exactly one argument -- the string passed */
     if (L4_UNLIKELY (argc != 1))
       throw Loggable_exception (
@@ -101,14 +111,18 @@ try
     L4Re::chkcap (L4Re::Env::env ()->get_cap<L4Re::Dataspace> ("function"),
                   "no capability called 'function' passed");
 
-    log<DEBUG> ("Trying to invoke python");
+    // log<DEBUG> ("Trying to invoke python");
+
+    metadata.start_runtime = std::chrono::high_resolution_clock::now ();
 
     /* actual call to the faas function */
     auto answer = invoke_python_main ("function", argv[0]);
 
+    metadata.end_runtime = std::chrono::high_resolution_clock::now ();
+
     /* the default _exit implementation can only return an integer *
      * to pass a string the custom manager->exit must be used.     */
-    L4Re::chksys (L4Re::Faas::getManager ()->exit (answer),
+    L4Re::chksys (L4Re::Faas::getManager ()->exit (answer, metadata),
                   "exit rpc");
 
     __builtin_unreachable ();

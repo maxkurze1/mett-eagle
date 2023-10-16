@@ -42,22 +42,22 @@ invoke_python_main (const char *filename)
   Py_InitializeFromConfig (&config);
   // pName = PyString_FromString ("rom/test.py");
   /* Error checking of pName left out */
-  log<DEBUG> ("Py_Init done");
+  // log<DEBUG> ("Py_Init done");
 
   pModule = PyImport_AddModule ("__main__");
 
-  log<DEBUG> ("Added module");
+  // log<DEBUG> ("Added module");
 
   // PyRun_SimpleString ("def test_function(str):\n  return \"some answer\"");
   PyRun_SimpleString ("import sys"
                       "print(\"hello world\")");
 
-  log<DEBUG> ("Ran string");
+  // log<DEBUG> ("Ran string");
 
   auto file = fopen(filename, "r");
   PyRun_SimpleFileExFlags(file, filename, true, NULL);
 
-  log<DEBUG> ("Ran file");
+  // log<DEBUG> ("Ran file");
 
   if (pModule != NULL)
     {
@@ -122,7 +122,7 @@ try
           -L4_EINVAL, "Wrong number of arguments. Expected 1 got {:d}",
                        argc);
 
-    log<DEBUG> ("Trying to invoke python");
+    // log<DEBUG> ("Trying to invoke python");
 
     L4Re::chkcap(L4Re::Env::env()->get_cap<L4Re::Dataspace>("function"), "no dataspace cap 'function' passed");
 
@@ -131,7 +131,7 @@ try
 
     /* the default _exit implementation can only return an integer *
      * to pass a string the custom manager->exit must be used.     */
-    L4Re::chksys (L4Re::Faas::getManager ()->exit ("some return string"),
+    L4Re::chksys (L4Re::Faas::getManager ()->exit ("some return string", {}),
                   "exit rpc");
 
     __builtin_unreachable ();

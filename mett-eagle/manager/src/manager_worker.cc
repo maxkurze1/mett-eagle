@@ -27,8 +27,6 @@ Manager_Worker_Epiface::op_signal (L4Re::Parent::Rights, unsigned long sig,
 {
   if (sig == 0) /*  exit -- why not SIGCHLD ? */
     {
-      this->end = std::chrono::high_resolution_clock::now ();
-
       auto err = static_cast<int> (val);
 
       /*
@@ -55,14 +53,14 @@ Manager_Worker_Epiface::op_signal (L4Re::Parent::Rights, unsigned long sig,
 
 long
 Manager_Worker_Epiface::op_exit (MettEagle::Manager_Worker::Rights,
-                                 const L4::Ipc::String_in_buf<> &_value)
+                                 const L4::Ipc::String_in_buf<> &_value,
+                                 MettEagle::Worker_Metadata data)
 {
-  this->end = std::chrono::high_resolution_clock::now ();
-
   const char *value = _value.data;
 
-  log<DEBUG> ("Worker exit: {:s}", value);
+  // log<DEBUG> ("Worker exit: {:s}", value);
   _worker->exit (value);
+  _metadata = data;
 
   /* With -L4_ENOREPLY no answer will be send to the worker. Keep the worker
    * thread blocked until destroyed. */

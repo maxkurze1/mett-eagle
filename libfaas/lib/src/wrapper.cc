@@ -24,6 +24,9 @@ using L4Re::LibLog::Loggable_exception;
 
 #include <l4/sys/kdebug.h>
 
+/* timing data of the worker */
+L4Re::MettEagle::Worker_Metadata metadata;
+
 /**
  * @brief Wrapper main that will handle the manager interaction
  */
@@ -37,11 +40,13 @@ try
           -L4_EINVAL, "Wrong number of arguments. Expected 1 got {:d}", argc);
 
     /* actual call to the faas function */
+    metadata.start_function = std::chrono::high_resolution_clock::now ();
     std::string ret{ Main (argv[0]) };
+    metadata.end_function = std::chrono::high_resolution_clock::now ();
 
     /* the default _exit implementation can only return an integer *
      * to pass a string the custom manager->exit must be used.     */
-    L4Re::chksys (L4Re::Faas::getManager ()->exit (ret.c_str ()), "exit rpc");
+    L4Re::chksys (L4Re::Faas::getManager ()->exit (ret.c_str (), metadata), "exit rpc");
 
     throw Loggable_exception(-L4_EFAULT, "wrapper unreachable");
   }

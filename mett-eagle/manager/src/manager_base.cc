@@ -28,7 +28,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   /* data store on stack to prevent corruption of values inside utcb
    * see next 'Note' for more information */
   MettEagle::Metadata meta_data;
-  log<DEBUG> ("Invoke action name='{}'", name);
+  // log<DEBUG> ("Invoke action name='{}'", name);
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name) == 0))
     throw Loggable_exception (-L4_EINVAL, "Action '{}' doesn't exist", name);
@@ -107,7 +107,7 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                 parent_ipc_cap.get (), _thread,
                 l4_umword_t (worker_epiface.get ())),
             "Failed to create gate");
-    l4_debugger_set_object_name (parent_ipc_cap.cap (), "wrkr->mngr");
+    // l4_debugger_set_object_name (parent_ipc_cap.cap (), "wrkr->mngr");
     auto worker_server = std::make_unique<L4::Ipc_svr::Default_loop_hooks> ();
     worker_epiface->set_server (worker_server.get (), parent_ipc_cap.get ());
 
@@ -126,12 +126,12 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
      * The corresponding 'end' measurement will be taken in the exit ipc
      * handler function
      */
-    worker_epiface->start = std::chrono::high_resolution_clock::now ();
+    meta_data.start_worker = std::chrono::high_resolution_clock::now ();
 
     worker->launch ();
-    l4_debugger_set_object_name (worker->_task.cap (), "wrkr");
-    l4_debugger_set_object_name (worker->_thread.cap (), "wrkr");
-    l4_debugger_set_object_name (worker->_rm.cap (), "wrkr rm");
+    // l4_debugger_set_object_name (worker->_task.cap (), "wrkr");
+    // l4_debugger_set_object_name (worker->_thread.cap (), "wrkr");
+    // l4_debugger_set_object_name (worker->_rm.cap (), "wrkr rm");
 
     /**
      * ========================== Server loop ==========================
@@ -165,18 +165,24 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
         msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
                            L4_IPC_NEVER); /* use compound send and receive */
       }
+
+    meta_data.end_worker = std::chrono::high_resolution_clock::now ();
+
     // TODO return error code to parent
     if (worker->exited_with_error ())
       throw Loggable_exception (-L4_EFAULT, "Worker exited with error");
     exit_value = worker->get_exit_value ();
+    auto worker_data = worker_epiface->_metadata;
+
+    meta_data.start_runtime = worker_data.start_runtime;
+    meta_data.start_function = worker_data.start_function;
+    meta_data.end_function = worker_data.end_function;
+    meta_data.end_runtime = worker_data.end_runtime;
+
     /* check if utcb buffer is large enough -- TODO is this necessary?*/
     if (L4_UNLIKELY (exit_value.length () >= ret.length))
       throw Loggable_exception (-L4_EMSGTOOLONG,
                                 "The utcb buffer is too small!");
-
-    /* fill metadata */
-    meta_data.start = worker_epiface->start;
-    meta_data.end = worker_epiface->end;
 
     /* delete smart pointers */
   }

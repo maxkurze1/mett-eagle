@@ -11,7 +11,7 @@ entry mett-eagle
     module function2
     module mett-eagle
     module mett-eagle-client
-    module mett-eagle-client/python/function.py
+    module mett-eagle-client/python/function1.py
     module mett-eagle-client/python/function2.py
     module python-faas2.7
     module python-faas3

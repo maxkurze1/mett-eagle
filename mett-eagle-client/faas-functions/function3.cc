@@ -31,7 +31,7 @@ Main (std::string /* args */)
       mem.push_back (some_mem); // keep reference
       size += chunk_size;
       
-      log<INFO> ("Malloced {}", size);
+      // log<INFO> ("Malloced {}", size);
     }
 
   return "";

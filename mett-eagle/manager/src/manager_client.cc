@@ -26,8 +26,8 @@ Manager_Client_Epiface::op_action_create (
     L4::Ipc::Snd_fpage file, MettEagle::Language lang)
 {
   const char *name = _name.data;
-  log<DEBUG> ("Create action name='{:s}' file passed='{}'", name,
-              file.cap_received ());
+  // log<DEBUG> ("Create action name='{:s}' file passed='{}'", name,
+              // file.cap_received ());
 
   if (L4_UNLIKELY (not file.cap_received ()))
     throw Loggable_exception (-L4_EINVAL, "No dataspace cap received");
@@ -52,7 +52,7 @@ Manager_Client_Epiface::op_action_delete (
     MettEagle::Manager_Client::Rights, const L4::Ipc::String_in_buf<> &_name)
 {
   const char *name = _name.data;
-  log<DEBUG> ("Deleting action name='{:s}'", name);
+  // log<DEBUG> ("Deleting action name='{:s}'", name);
 
   /* remove the dataspace from the map */
   /* this should decrease the ref count and unmap the dataspace in case no

@@ -37,14 +37,8 @@ protected:
   std::shared_ptr<Worker> _worker;
 
 public:
-  /* start will be measured as short as possible before worker execution */
-  /* though it will still be measured before the elf launcher starts */
-  std::chrono::time_point<std::chrono::high_resolution_clock> start;
-
-  /* end will be measured as short as possible after worker exit */
-  /* this will be measured in the corresponding rpc handler */
-  std::chrono::time_point<std::chrono::high_resolution_clock> end;
-
+  MettEagle::Worker_Metadata _metadata;
+  
 public:
   Manager_Worker_Epiface (
       std::shared_ptr<std::map<std::string, Action> > actions,
@@ -69,5 +63,6 @@ public:
   long op_signal (L4Re::Parent::Rights, unsigned long sig, unsigned long val);
 
   long op_exit (MettEagle::Manager_Worker::Rights,
-                const L4::Ipc::String_in_buf<> &_value);
+                const L4::Ipc::String_in_buf<> &_value,
+                MettEagle::Worker_Metadata data);
 };
