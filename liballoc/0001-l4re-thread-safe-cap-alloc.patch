@@ -1,0 +1,67 @@
+From 4ec28237c6c40767d7776e0f28fc9ec2d51b535f Mon Sep 17 00:00:00 2001
+From: Samxamnom <xamsamnam@gmail.com>
+Date: Tue, 28 Nov 2023 14:14:32 +0100
+Subject: [PATCH] Swap L4Re::Util::cap_alloc with thread safe allocator of
+ liballoc
+
+---
+ l4re/util/include/cap_alloc | 4 +++-
+ l4re/util/libs/cap_alloc.cc | 7 +++++--
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/l4re/util/include/cap_alloc b/l4re/util/include/cap_alloc
+index 0c45361e..231a1427 100644
+--- a/l4re/util/include/cap_alloc
++++ b/l4re/util/include/cap_alloc
+@@ -29,6 +29,7 @@
+ #include <l4/sys/smart_capability>
+ #include <l4/sys/task>
+ #include <l4/re/consts>
++#include <l4/liballoc/alloc>
+ 
+ namespace L4Re { namespace Util {
+ 
+@@ -50,7 +51,8 @@ namespace L4Re { namespace Util {
+  *
+  * \note This capability allocator is not thread-safe.
+  */
+-extern _Cap_alloc &cap_alloc;
++// extern _Cap_alloc &cap_alloc;
++extern Alloc::Safe_counting_cap_alloc<> &cap_alloc;
+ 
+ /**
+  * Helper for Unique_cap and Unique_del_cap.
+diff --git a/l4re/util/libs/cap_alloc.cc b/l4re/util/libs/cap_alloc.cc
+index fb8e19a6..2261ae80 100644
+--- a/l4re/util/libs/cap_alloc.cc
++++ b/l4re/util/libs/cap_alloc.cc
+@@ -40,6 +40,7 @@ L4Re::Cap_alloc_t<L4Re::Util::Cap_alloc<4096> >
+ 
+ #include <l4/re/dataspace>
+ #include <l4/re/mem_alloc>
++#include <l4/liballoc/alloc>
+ 
+ namespace
+ {
+@@ -62,14 +63,16 @@ namespace
+     }
+   };
+ 
+-  Ca __attribute__((init_priority(INIT_PRIO_L4RE_UTIL_CAP_ALLOC))) __cap_alloc;
++  // Ca __attribute__((init_priority(INIT_PRIO_L4RE_UTIL_CAP_ALLOC))) __cap_alloc;
++    L4Re::Alloc::Safe_counting_cap_alloc<> __attribute__((init_priority(INIT_PRIO_L4RE_UTIL_CAP_ALLOC))) __cap_alloc;
+ }
+ 
+ #endif
+ 
+ namespace L4Re {
+   namespace Util {
+-    _Cap_alloc &cap_alloc = __cap_alloc;
++    // _Cap_alloc &cap_alloc = __cap_alloc;
++    Alloc::Safe_counting_cap_alloc<> &cap_alloc = __cap_alloc;
+   }
+ #ifndef SHARED
+   Cap_alloc *virt_cap_alloc = &__cap_alloc;
+-- 
+2.42.0
+

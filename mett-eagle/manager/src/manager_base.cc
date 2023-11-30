@@ -15,12 +15,26 @@
 
 #include <l4/sys/debugger.h>
 
+l4_timeout_s
+static check_timeout (
+    std::chrono::time_point<std::chrono::high_resolution_clock> start,
+    l4_uint32_t timeout_us)
+{
+  auto passed_us = std::chrono::duration_cast<std::chrono::microseconds> (
+                       std::chrono::high_resolution_clock::now () - start)
+                       .count ();
+  auto remaining_us = timeout_us - passed_us;
+  if (L4_UNLIKELY (remaining_us < 0))
+    throw Loggable_exception (-L4_EFAULT, "Worker timeout");
+  return l4_timeout_from_us (remaining_us);
+}
+
 long
 Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
                                         const L4::Ipc::String_in_buf<> &_name,
                                         const L4::Ipc::String_in_buf<> &arg,
                                         L4::Ipc::Array_ref<char> &ret,
-                                        MettEagle::Config cfg,
+                                        MettEagle::Config _cfg,
                                         MettEagle::Metadata &data)
 {
   const char *name = _name.data;
@@ -28,6 +42,9 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
   /* data store on stack to prevent corruption of values inside utcb
    * see next 'Note' for more information */
   MettEagle::Metadata meta_data;
+  /* copy to prevent corruption on syscall */
+  MettEagle::Config cfg = _cfg;
+
   // log<DEBUG> ("Invoke action name='{}'", name);
   /* c++ maps dont have a map#contains */
   if (L4_UNLIKELY (_actions->count (name) == 0))
@@ -117,7 +134,8 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
     worker->set_envp_strings ({ "PKGNAME=Worker    ", "LOG_LEVEL=31" });
 
     worker->add_initial_capability (
-        L4Re::Env::env ()->get_cap<L4Re::Namespace> ("rom"), "rom", L4_cap_fpage_rights::L4_CAP_FPAGE_RW);
+        L4Re::Env::env ()->get_cap<L4Re::Namespace> ("rom"), "rom",
+        L4_cap_fpage_rights::L4_CAP_FPAGE_RW);
     if (action.lang != MettEagle::Language::BINARY)
       worker->add_initial_capability (action.ds.get (), "function",
                                       L4_cap_fpage_rights::L4_CAP_FPAGE_RW);
@@ -144,17 +162,17 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
      * client unchanged.
      */
 
-    // TODO maybe add some timeout or heartbeat interval to prevent malicious
-    // clients
-    l4_msgtag_t msg = chkipc (
-        l4_ipc_receive (worker->_thread.cap (), l4_utcb (), L4_IPC_NEVER),
-        "Worker ipc failed.");
-
+    l4_timeout_t timeout = l4_timeout (L4_IPC_TIMEOUT_0, L4_IPC_TIMEOUT_NEVER);
+    if (cfg.timeout_us)
+      timeout.p.rcv = check_timeout (meta_data.start_worker, cfg.timeout_us);
+    l4_msgtag_t msg
+        = chkipc (l4_ipc_receive (worker->_thread.cap (), l4_utcb (), timeout),
+                  "Worker ipc failed.");
     while (true)
       {
         /* call the corresponding function of the epiface */
         l4_msgtag_t reply = worker_epiface->dispatch (
-            msg, 0 /* rights dont matter */, l4_utcb ());
+            msg, 0 /* rights don't matter */, l4_utcb ());
         /* Note: be careful can't invoke any ipc between dispatch and ipc_call
          * (do not modify utcb) */
 
@@ -162,11 +180,15 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
         if (not worker->alive ())
           break;
         /* no exit received -> wait for next RPC */
-        msg = l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
-                           L4_IPC_NEVER); /* use compound send and receive */
+        timeout = l4_timeout (L4_IPC_TIMEOUT_0, L4_IPC_TIMEOUT_NEVER);
+        if (cfg.timeout_us)
+          timeout.p.rcv
+              = check_timeout (meta_data.start_worker, cfg.timeout_us);
+        msg = chkipc (
+            l4_ipc_call (worker->_thread.cap (), l4_utcb (), reply,
+                         L4_IPC_NEVER),
+            "Worker ipc failed."); /* use compound send and receive */
       }
-
-    meta_data.end_worker = std::chrono::high_resolution_clock::now ();
 
     // TODO return error code to parent
     if (worker->exited_with_error ())
@@ -186,6 +208,8 @@ Manager_Base_Epiface::op_action_invoke (MettEagle::Manager_Base::Rights,
 
     /* delete smart pointers */
   }
+
+  meta_data.end_worker = std::chrono::high_resolution_clock::now ();
 
   /* set return values */
   data = meta_data;

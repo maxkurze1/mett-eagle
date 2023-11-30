@@ -1,10 +1,11 @@
 /*
  * (c) 2010 Alexander Warg <warg@os.inf.tu-dresden.de>
  *     economic rights: Technische Universität Dresden (Germany)
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
  *
  * This file is part of TUD:OS and distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 #pragma once
 

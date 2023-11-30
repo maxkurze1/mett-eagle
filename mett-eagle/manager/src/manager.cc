@@ -54,8 +54,8 @@ try
     /* update global bitmap */
     available_cpus = cpus.map;
 
-    // log<INFO> ("Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
-              //  cpus.map, cpu_max, available_cpus.count (), cpu_max);
+    log<INFO> ("Scheduler info (available cpus) :: {:0{}b} => {:d}/{:d}",
+               cpus.map, cpu_max, available_cpus.count (), cpu_max);
 
     /*
      * Associate the 'server' endpoint that was already
@@ -67,7 +67,7 @@ try
                   "Couldn't register service, is there a 'server' in "
                   "the caps table?");
 
-    // log<INFO> ("Starting Mett-Eagle registry server!");
+    log<INFO> ("Starting Mett-Eagle registry server!");
 
     // start server loop -- loop will not return!
     // started with custom dispatch to log errors

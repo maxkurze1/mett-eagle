@@ -41,8 +41,10 @@ try
 
     /* actual call to the faas function */
     metadata.start_function = std::chrono::high_resolution_clock::now ();
+    metadata.start_runtime = metadata.start_function;
     std::string ret{ Main (argv[0]) };
     metadata.end_function = std::chrono::high_resolution_clock::now ();
+    metadata.end_runtime = metadata.end_function;
 
     /* the default _exit implementation can only return an integer *
      * to pass a string the custom manager->exit must be used.     */
@@ -67,5 +69,5 @@ catch (L4::Runtime_error &e)
 catch (... /* catch all */)
   {
     log<FATAL> ("Function threw unknown error.");
-    return -0xDEAD;
+    return -0xDEAD; // -57005 (keep for grepping)
   }

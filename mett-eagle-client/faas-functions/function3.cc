@@ -9,13 +9,17 @@
 /**
  * @brief Memory limit tester
  *
- * This function will allocate memory in a loop until 
+ * This function will allocate memory in a loop until
  * it reaches the allocation limit.
+ *
+ * Note: All allocated memory will be set to all 1's
+ * (it somehow IS POSSIBLE to allocate more memory
+ * if it stays untouched)
  */
 
 using namespace L4Re::LibLog;
 
-constexpr unsigned long chunk_size = 8192UL;
+constexpr unsigned long chunk_size = 8192UL; // 2 pages at a time
 
 std::list<void *> mem;
 
@@ -30,8 +34,8 @@ Main (std::string /* args */)
       memset (some_mem, 0xFF, chunk_size);
       mem.push_back (some_mem); // keep reference
       size += chunk_size;
-      
-      // log<INFO> ("Malloced {}", size);
+
+      log<INFO> ("Malloced {}", size);
     }
 
   return "";

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <chrono>
+#include <l4/sys/cxx/ipc_iface>
 #include <l4/sys/types.h>
 
 namespace L4Re
@@ -34,6 +35,64 @@ enum Protocol
   PROTO_MANAGER_WORKER   = 0x5002,
   PROTO_MANAGER_REGISTRY = 0x5003,
   // clang-format on
+};
+
+// /**
+//  * Copy paste for making it constexpr
+//  *
+//  * have a look at the original definition for more information
+//  *
+//  * @see __timeout.h
+//  */
+// L4_INLINE
+// constexpr l4_timeout_s
+// l4_timeout_from_us_constexpr (l4_uint32_t us) L4_NOTHROW
+// {
+//   l4_timeout_s t{};
+//   if (us == 0)
+//     t = L4_IPC_TIMEOUT_0;
+//   else if (us == L4_TIMEOUT_US_NEVER)
+//     t = L4_IPC_TIMEOUT_NEVER;
+//   else
+//     {
+//       int e = (31 - __builtin_clz (us)) - 9;
+//       if (e < 0)
+//         e = 0;
+//       unsigned m = us >> e;
+//       t.t = (e << 10) | m;
+//     }
+//   return t;
+// }
+
+/**
+ * RPC attribute for a timeout RPC.
+ *
+ * This class can be used as FLAGS parameter to L4::Ipc::Msg::Rpc_call and
+ * L4::Ipc::Msg::Rpc_inline_call templates.
+ *
+ * This flag accepts a send and a receive timeout parameter. Both need to be in
+ * microseconds and will default to NEVER.
+ *
+ * Note: use L4_TIMEOUT_US_NEVER instead of L4_IPC_NEVER
+ * Note: L4_TIMEOUT_US_MAX holds the longest possible waiting period in
+ *       microseconds
+ *
+ * Examples:
+ * ~~~~~~~~~~~{.cpp}
+ * L4_RPC(long, send, (unsigned value),
+ * L4Re::MettEagle::Call_timeout<L4_TIMEOUT_US_NEVER, 1000>);
+ * ~~~~~~~~~~~
+ */
+template <l4_uint32_t SEND_TIMEOUT_US = L4_TIMEOUT_US_NEVER,
+          l4_uint32_t RECEIVE_TIMEOUT_US = L4_TIMEOUT_US_NEVER>
+struct Call_timeout : L4::Ipc::Call
+{
+  static l4_timeout_t
+  timeout ()
+  {
+    return l4_timeout_t{ .p{ .rcv = l4_timeout_from_us (RECEIVE_TIMEOUT_US),
+                             .snd = l4_timeout_from_us (SEND_TIMEOUT_US) } };
+  }
 };
 
 } // namespace MettEagle

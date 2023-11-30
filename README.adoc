@@ -2,23 +2,56 @@
 :author: Max Kurze
 :email: Max.Kurze@mailbox.tu-dresden.de
 
-Mett-Eagle is a Serverless platform to execute functions on top of the Fiasco.OC microkernel.
+Mett-Eagle is a Serverless platform to execute functions on top of the Fiasco.OC microkernel using the L4Re Framework.
 
 == Usage
 
-The project should be cloned into a directory `+<l4>/pkg/<faas>+`.
+The project should be cloned into the l4 package directory `+<l4>/pkg/<faas>+`.
 It can then be build using the default `+make+` command inside the `+<l4-build>+` directory.
 
-To execute the MettEagle manager together with the example client invoke:
+To execute the Mett-Eagle server together with the benchmark client invoke:
 
 [source,bash]
 ----
-make qemu \
-  MODULE_SEARCH_PATH="../<fiasco-build>:../<l4>/pkg/<faas>" \
-  MODULES_LIST="../<l4>/pkg/<faas>/modules.list" \
+CLIENT_ARGS='--threads=<client_num> --iterations=<iter>' \
+QEMU_OPTIONS='-smp <client_num>'                         \
+make qemu                                                \
+  MODULE_SEARCH_PATH="<fiasco-build>:<l4>/pkg/<faas>"    \
+  MODULES_LIST="<l4>/pkg/<faas>/modules.list"            \
   E=mett-eagle
 ----
 
+Using this command `+<client_num>+` specifies the number of threads that will be spawned by the client. These threads will concurrently send invocation requests to the server. Since the server will assign each client a dedicated core qemu needs at least the same number of cores (-smp) as clients will be started. Each thread will make `+<iter>+` invocations.
+
+For more information about how the server and client can be used individually, 
+have a look at the ned config of this benchmark example (link:mett-eagle.cfg[mett-eagle.cfg]).
+
+== Packages
+
+This repository contains a small collection of l4 packages necessary for the Mett-Eagle serverless platform. These components make use of the link:https://l4re.org/doc/l4re_build_system.html[L4Re build system] for a modular design. Thus most of the components can also be used on their own.
+
+|===
+|Package|Content
+
+|link:mett-eagle/doc/mett-eagle.md[mett-eagle]
+|The server implementation of the platform. This also includes the link:mett-eagle/include/client[client-server] interface as well as the link:mett-eagle/include/worker[server-worker] interface specification. Note: It also provides some link:mett-eagle/include/util[wrappers] for more convenient client implementation.
+
+|link:libfaas/doc/libfaas.md[libfaas]
+|This package produces multiple binaries for serverless function development. It provides a library `+libfaas+` that can be linked against C++ and other binaries providing argument marshalling and wrapper functions for the server-worker interface. Additionally it also provides an executable `+python-faas2.7+` which contains a python 2.7 runtime and python bindings for the server-worker interface. This binary will be started by the manager if it is passed a serverless function written in python.
+
+|link:mett-eagle-client/doc/client.md[mett-eagle-client]
+|This packages contains the client implementation that was used to measure the performance of the Mett-Eagle platform. It can be used as a reference for writing custom clients.
+
+|link:liblog/doc/liblog.md[liblog]
+|A logging library for L4Re that provides more useful information. This library can log the source location of invocations as well the system time, thread id and severity of the message. It is used inside the Mett-Eagle framework. Note: This library is currently a header-only library and does not need to be linked against.
+
+|link:libfmt/doc/libfmt.md[libfmt]
+|An L4Re port of the `+{fmt}+` library that was included into the c++20 standard lib as `+std::format+`. This port is used by liblog. The port is necessary to compile liblog with older standards, which might make its integration into existing code easier.
+
+|liballoc
+|A library containing a thread safe capability allocator. However, Since a lot of usages of `+L4Re::Util::cap_alloc+` are hardcoded, it also provides a link:liballoc/0001-l4re-thread-safe-cap-alloc.patch[patch file] for `+l4re-core+`, which replaces the default cap_alloc implementation with the provided thread safe one.
+|===
+
 == Architecture
 
-Refer to the link:./mett-eagle/doc/mett-eagle.md[documentation of the Mett-Eagle server] for more information about the architecture.
+Refer to the link:mett-eagle/doc/mett-eagle.md[documentation of the Mett-Eagle server] for more information about the platform architecture.

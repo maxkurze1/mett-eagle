@@ -2,18 +2,13 @@
 
 ## Description
 
-The purpose of this library is to make the log look more consistent and to make
-it easier for application developers.
+The purpose of this library is to make the log look more consistent and logging
+more convenient application developers.
 
-The library provides the header 'l4/liblog/log' which contains 5 utility
-functions for logging (with ascending priority: debug, info, warn, error and
-fatal). These functions will accept printf-style arguments and will print the
-message with the corresponding log level.
+This library provides the `<l4/liblog/log>` header which contains utility
+functions for logging. These functions will accept `{fmt}`-style arguments.
 
 NOTE: The log functions will print a line break at the end per default!
-
-NOTE: These functions are implemented using constructors, thus if only a single
-argument is passed it is necessary to use curly braces instead of parenthesis.
 
 Which messages are printed is defined by the 'output log level'. This level can
 be set using the `setLevel` function. The default Log level is `INFO` which
@@ -32,7 +27,7 @@ The library can be configured through environment variables.
 
 This variable should contain a bitmap of the enabled Levels. If not set, the
 level will default to `INFO` (= `0b01111`). This bitmap should have 5 bits
-representing debug, info, warn, error, fatal in exactly this order. The
+representing debug, info, warn, error, and fatal in exactly this order. The
 `setLevel` function also sets this environment variable.
 
 ### PKGNAME
@@ -48,20 +43,16 @@ utility methods
 ```cpp
 #include <l4/liblog/log>
 
-using L4Re::LibLob::Log;
+using namespace L4Re::LibLog;
 
 int some_var = 5;
 
-Log::debug{ "Debug %p", &some_var };
-Log::info { "This is some info %s with a number: %d", "message", some_var };
-Log::warn { "There's something missing" };
-Log::error{ "That should not happen" };
-Log::fatal{ "I can't recover from here" };
+log<DEBUG>("Debug {:p}", &some_var);
+log<INFO> ("This is some info {:s} with a number: {:s}", "message", some_var);
+log<WARN> ("There's something missing");
+log<ERROR>("That should not happen");
+log<FATAL>("I can't recover from here");
 ```
-
-Since these methods are constructors it is possible to call them with either
-curly braces or parenthesis, except when there is only one parameter. In this
-special case braces are necessary.
 
 An example configuration (using ned) would look like this:
 
@@ -91,7 +82,7 @@ Some L4 errors can be directly passed to the log.
 ```cpp
 catch (L4::Base_exception &exc)
   {
-    Log::fatal{ exc };
+    log<FATAL> (exc);
   }
 ```
 
@@ -100,7 +91,7 @@ For Base_exception's the Base_exception#str will be printed.
 ```cpp
 catch (L4::Runtime_error &exc)
   {
-    Log::fatal{ exc };
+    log<FATAL> (exc);
   }
 ```
 
@@ -119,7 +110,7 @@ the loggable error is, that it can be constructed with a format string.
 #include <l4/liblog/loggable-exception>
 
 using L4Re::LibLog::Loggable_exception;
-using L4Re::LibLog::Log;
+using namespace L4Re::LibLog;
 
 try
   {
@@ -129,15 +120,13 @@ try
   }
 catch (Loggable_exception &e)
   {
-    Log::fatal ("{}", e);
+    log<FATAL> ("{}", e);
     return e.err_no ();
   }
 ```
 
 ## TODO
 
-add chksys
-add chkcap
-add chkipc
+add chksys add chkcap add chkipc
 
 with error lambda/function formatted output and Loggable_exception

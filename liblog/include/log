@@ -244,14 +244,13 @@ struct CleanFormat
  * @tparam FormatSpecifier The format of the printed messages
  */
 template <typename Severity,
-          typename Silencer = SilenceByEnv, // TODO NoSilence as default?
-          typename Synchronizer
-          = SemaphoreSync, // TODO NoSync as default?
+          typename Silencer = SilenceByEnv,      // TODO NoSilence as default?
+          typename Synchronizer = SemaphoreSync, // TODO NoSync as default?
           typename FormatSpecifier = VerboseFormat, typename... Args>
 inline static void
 log (ArgWithLocation<const char *> format, Args &&...args)
 {
-#ifndef NDEBUG
+  // #ifndef NDEBUG
   /* log becomes a noop when debugging is disabled */
 
   /* check if message should be silenced */
@@ -294,19 +293,21 @@ log (ArgWithLocation<const char *> format, Args &&...args)
 
   sync.end ();
 
-#endif
+  // #endif
 }
 
 /**
- * Necessary to prevent the following log function to match on log invocations
- * with matching arguments
+ * This is a utility class that is used to prevent ambiguity between the normal
+ * log function and the single object log function
  *
- * e.g. log<INFO>("{} {} {}", "some string", "another string", 10);
- *
+ * E.g. prevent that
+ *   'log<>("some {}", "argument");'
+ * matches with arg = "some {}" and file = "argument"
  */
-struct Empty
+class Separator
 {
 };
+
 /**
  * @brief Utility logging method for logging a single object
  *
@@ -317,7 +318,7 @@ struct Empty
  */
 template <typename... Types, typename ArgType>
 inline static void
-log (ArgType &&arg, Empty = {}, const char *file = __builtin_FILE (),
+log (ArgType &&arg, Separator = {}, const char *file = __builtin_FILE (),
      const char *function = __builtin_FUNCTION (),
      const int line = __builtin_LINE ())
 {
@@ -331,6 +332,7 @@ log (ArgType &&arg, Empty = {}, const char *file = __builtin_FILE (),
  *
  * This method is necessary to extract the location from the error
  * itself in order to print the location of the 'throw' statement.
+ * (and not the location of the log<>(...) call)
  *
  * Note: This method will print a line break per default!
  *

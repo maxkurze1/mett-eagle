@@ -1,10 +1,11 @@
 /*
  * (c) 2010 Alexander Warg <warg@os.inf.tu-dresden.de>
  *     economic rights: Technische Universität Dresden (Germany)
+ * (c) 2023 Max Kurze <max.kurze@mailbox.tu-dresden.de>
  *
  * This file is part of TUD:OS and distributed under the terms of the
  * GNU General Public License 2.
- * Please see the COPYING-GPL-2 file for details.
+ * Please see the LICENSE.md file for details.
  */
 
 #include "manager.h"
@@ -85,7 +86,6 @@ App_model::local_attach_ds (Const_dataspace ds, unsigned long size,
   l4_addr_t in_pg_offset = offset - pg_offset;
   unsigned long pg_size = l4_round_page (size + in_pg_offset);
   l4_addr_t vaddr = 0;
-  chkcap (ds.get(), "idk anymore");
   chksys (rm->attach (&vaddr, pg_size,
                       L4Re::Rm::F::Search_addr | L4Re::Rm::F::R, ds.get (),
                       pg_offset),

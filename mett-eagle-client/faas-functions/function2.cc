@@ -5,10 +5,10 @@
  * @brief Recursive function call tester
  *
  * This function will invoke a recursive function
- * call, calling function1
+ * call, calling 'function1'
  *
  * Therefore it is necessary that function1 has already
- * been defined
+ * been defined by the same client
  */
 
 using namespace L4Re::LibLog;

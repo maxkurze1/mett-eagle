@@ -15,6 +15,7 @@ entry mett-eagle
     module mett-eagle-client/python/function2.py
     module python-faas2.7
     module python-faas3
+    module cpufreq
 
     module libstdc++.so
     module libld-l4.so

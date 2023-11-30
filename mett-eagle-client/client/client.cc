@@ -8,10 +8,10 @@
 #include <algorithm>
 #include <condition_variable>
 #include <list>
-#include <vector>
 #include <memory>
 #include <numeric>
 #include <thread>
+#include <vector>
 
 #include <l4/liblog/error_helper>
 #include <l4/liblog/log>
@@ -24,12 +24,13 @@
 #include <l4/sys/scheduler>
 #include <l4/sys/thread>
 
+#include <l4/fmt/chrono.h>
 #include <l4/fmt/core.h>
 #include <l4/fmt/ranges.h>
-#include <l4/fmt/chrono.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <getopt.h>
 #include <pthread-l4.h>
 #include <pthread.h>
 #include <string>
@@ -38,9 +39,9 @@
 namespace MettEagle = L4Re::MettEagle;
 using namespace L4Re::LibLog;
 
-static int THREAD_NUM = 1;    // 63
-static int ITERATIONS = 1000; // 901 is fine
-static int waiting_time_ms = 50;
+static int THREAD_NUM = 64;
+static int ITERATIONS = 1000;
+// static int waiting_time_ms = 50;
 
 /**
  * These metrics that are measured by each thread (client) separately
@@ -95,16 +96,18 @@ std::atomic<int> waiting_count = 0;
 std::condition_variable serialize_clients;
 
 static void
-benchmark (const char *action_name, Metrics *metrics)
+benchmark (const char *action_name, Metrics *metrics, int id)
 try
   {
-    /* setup */
     auto manager = MettEagle::getManager ("manager");
 
     L4Re::chksys (manager->action_create ("testAction", action_name,
-                                          MettEagle::Language::PYTHON),
+                                          MettEagle::Language::BINARY),
                   "action create");
 
+    log<INFO> ("registered client {}", waiting_count.load ());
+
+    /* notify main thread to start next client */
     std::unique_lock<std::mutex> lk (mutex);
     waiting_count++;
     serialize_clients
@@ -115,12 +118,9 @@ try
     lk.unlock ();
     sync_clients.notify_one ();
 
-
     /* this is the actual measurement loop */
     for (int i = 0; i < ITERATIONS; i++)
       {
-        // log<DEBUG> ("Iteration {}", i);
-
         /* invocation */
         auto start_invocation = std::chrono::high_resolution_clock::now ();
 
@@ -130,15 +130,16 @@ try
           {
             L4Re::chksys (manager->action_invoke (
                               "testAction",
-                              std::to_string (waiting_time_ms).c_str (),
-                              answer, {}, &data),
+                              "", // std::to_string (waiting_time_ms).c_str (),
+                              answer, MettEagle::Config{.timeout_us = 75'000}, &data),
                           "action invoke");
           }
         catch (...)
           {
-            log<ERROR> ("action invoke with error");
-            i--;
-            continue;
+              // log<ERROR> ("action invoke with error (i = {:d}),
+              // retrying...", i);
+              i--;
+              continue;
           }
 
         auto end_invocation = std::chrono::high_resolution_clock::now ();
@@ -159,163 +160,178 @@ try
         // clang-format on
 
         /* duration measured inside the application */
+        // metrics->function_internal_duration.push_back (
+        //     std::chrono::microseconds (std::stoul (answer)));
+
         metrics->function_internal_duration.push_back (
-            std::chrono::microseconds (std::stoul (answer)));
+            std::chrono::microseconds (0));
+          }
       }
-  }
-catch (L4Re::LibLog::Loggable_exception &e)
-  {
-    log<FATAL> (e);
-  }
-catch (L4::Runtime_error &e)
-  {
-    log<FATAL> (e);
-  }
+    catch (L4Re::LibLog::Loggable_exception &e) { log<FATAL> (e); }
+    catch (L4::Runtime_error &e) { log<FATAL> (e); }
 
-/* struct to pass arguments to pthread function*/
-struct pthread_args
-{
-  const char *action_name;
-  Metrics *metrics;
-};
-/* pthread wrapper for calling the benchmark function */
-static void *
-pthread_benchmark (void *_arg)
-{
-  auto args = (pthread_args *)_arg;
-  benchmark (args->action_name, args->metrics);
-  return NULL;
-}
+    /* struct to pass arguments to pthread function*/
+    struct pthread_args
+    {
+      const char *action_name;
+      Metrics *metrics;
+      int id;
+    };
 
-Metrics *metrics_arr;
+    /* pthread wrapper for calling the benchmark function */
+    static void *pthread_benchmark (void *_arg)
+    {
+      auto args = (pthread_args *)_arg;
+      benchmark (args->action_name, args->metrics, args->id);
+      return NULL;
+    }
 
-std::list<std::thread> threads;
+    Metrics *metrics_arr;
+
+    std::list<std::thread> threads;
 
 #include <l4/sys/debugger.h>
 #include <thread-l4>
 
-int
-main (const int argc, const char *const argv[])
-try
-  {
-    // l4_debugger_set_object_name (L4Re::Env::env ()->task ().cap (),
-    //  "clnt"); // mett-eagle client
-    // l4_debugger_set_object_name (L4Re::Env::env ()->main_thread ().cap (),
-    //  "clnt main");
-
-    /* increase log semaphore once to prevent deadlock ... TODO this would fit
-     * better into the .cfg */
-    L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
-
-    log<INFO> ("{:d} passed args:", argc);
-    for (int i = 0; i < argc; i++)
+    int main (const int argc, char *const argv[])
+    try
       {
-        log<INFO> ("   {:d}: {:s}", i, argv[i]);
-      }
+        /* increase log semaphore once to prevent deadlock ... TODO this would
+         * fit better into the .cfg, but currently there seems to be no
+         * semaphore:up() for lua*/
+        L4Re::Env::env ()->get_cap<L4::Semaphore> ("log_sync")->up ();
 
-    /* 0th argument == name of the binary => ignored */
+        // l4_debugger_set_object_name (L4Re::Env::env ()->task ().cap (),
+        //  "clnt"); // mett-eagle client
+        // l4_debugger_set_object_name (L4Re::Env::env ()->main_thread ().cap
+        // (), "clnt main");
 
-    /* first argument == number of client threads */
-    if (argc >= 2)
-      {
-        THREAD_NUM = std::stol (argv[1]);
-      }
-    log<INFO> ("Thread number set to {}", THREAD_NUM);
+        /* parsing command line options using GNUs getopt */
 
-    /* second argument == number of iterations */
-    if (argc >= 3)
-      {
-        ITERATIONS = std::stol (argv[2]);
-      }
-    log<INFO> ("Iteration count set to {}", ITERATIONS);
+        // clang-format off
+        option long_options[] = {
+          { "iterations", required_argument, nullptr, 'i' },
+          { "threads",    required_argument, nullptr, 't' },
+          { "help",       no_argument,       nullptr, 'h' },
+          { nullptr,      0,                 nullptr, 0   },
+        };
+        // clang-format on
 
-    // TODO pass everything else to the function ??
+        opterr = 0; // do not print default error message
+        for (int option, index;
+             (option = getopt_long (argc, argv, "i:t:h", long_options, &index))
+             != -1;)
+          switch (option)
+            {
+            case 't':
+              THREAD_NUM = std::stol (optarg);
+              break;
+            case 'i':
+              ITERATIONS = std::stol (optarg);
+              break;
+            default:
+              log<INFO> ("unknown option '{:s}'", argv[optind - 1]);
+              [[fallthrough]];
+            case 'h':
+              log<INFO> ("{:s} - a benchmark client for the mett-eagle server",
+                         argv[0]);
+              log<INFO> ("USAGE:");
+              log<INFO> ("{:s} [OPTION]...", argv[0]);
+              log<INFO> ("OPTIONS");
+              log<INFO> ("  -i --iterations=NUM");
+              log<INFO> ("    each thread should do NUM invocations");
+              log<INFO> ("  -t --threads=NUM");
+              log<INFO> ("    NUM threads should be spawned");
+              log<INFO> ("  -h --help");
+              log<INFO> ("    show this help message");
+              exit (0);
+            }
 
-    metrics_arr = new Metrics[THREAD_NUM];
-    if (metrics_arr == NULL)
-      throw Loggable_exception (-L4_ENOMEM, "malloc");
+        log<INFO> ("Thread number set to {}", THREAD_NUM);
+        log<INFO> ("Iteration count set to {}", ITERATIONS);
 
-    /* start threads c++ threads */
-    // for (int i = 0; i < THREAD_NUM; i++)
-    //   {
-    //     std::thread thread (benchmark, "rom/function1", &metrics_arr[i]);
-    //     l4_debugger_set_object_name (std::L4::thread_cap (thread).cap (),
-    //                                  fmt::format ("me clnt {}", i).c_str
-    //                                  ());
-    //     threads.push_back (std::move (thread));
-    //   }
+        // TODO pass remaining arguments to the function or not??
 
-    /* start threads pthreads */
-    pthread_t pthread[THREAD_NUM];
-    pthread_args args[THREAD_NUM];
-    for (int i = 0; i < THREAD_NUM; i++)
-      {
-        std::unique_lock<std::mutex> lk (mutex);
-        serialize_clients.wait (lk, [=] { return waiting_count == i; });
-        lk.unlock ();
+        metrics_arr = new Metrics[THREAD_NUM];
+        if (metrics_arr == NULL)
+          throw Loggable_exception (-L4_ENOMEM, "malloc");
 
-        pthread_attr_t attr;
-        pthread_attr_init (&attr);
+        /* start threads pthreads */
+        pthread_t pthread[THREAD_NUM];
+        pthread_args args[THREAD_NUM];
+        for (int i = 0; i < THREAD_NUM; i++)
+          {
+            /* wait until the client of the previous iteration has registered
+             * his action */
+            /* this serialization is only necessary to make sure that the
+             * server will assign the available cpus to the clients in a
+             * predictable manner */
+            std::unique_lock<std::mutex> lk (mutex);
+            serialize_clients.wait (lk, [=] { return waiting_count == i; });
+            lk.unlock ();
 
-        attr.create_flags |= PTHREAD_L4_ATTR_NO_START;
+            pthread_attr_t attr;
+            pthread_attr_init (&attr);
 
-        args[i].action_name = "rom/function1.py";
-        args[i].metrics = &metrics_arr[i];
+            attr.create_flags |= PTHREAD_L4_ATTR_NO_START;
 
-        int failed
-            = pthread_create (&pthread[i], &attr, pthread_benchmark, &args[i]);
-        if (failed)
-          throw Loggable_exception (-errno, "failed to create thread");
+            args[i].action_name = "rom/function1";
+            args[i].metrics = &metrics_arr[i];
+            args[i].id = i;
 
-        pthread_attr_destroy (&attr);
+            int failed = pthread_create (&pthread[i], &attr, pthread_benchmark,
+                                         &args[i]);
+            if (failed)
+              throw Loggable_exception (-errno, "failed to create thread");
 
-        auto sched_cap = L4Re::Util::make_shared_cap<L4::Scheduler> ();
+            pthread_attr_destroy (&attr);
 
-        // l4_umword_t bitmap = 0b10LL << i;
-        l4_umword_t bitmap = 0b1;
+            auto sched_cap = L4Re::Util::make_shared_cap<L4::Scheduler> ();
 
-        chksys (l4_msgtag_t (
+            // l4_umword_t bitmap = 0b10LL << i;
+            l4_umword_t bitmap = 0b1;
+
+            chksys (
+                l4_msgtag_t (
                     L4Re::Env::env ()->user_factory ()->create<L4::Scheduler> (
                         sched_cap.get ())
                     << l4_mword_t (L4_SCHED_MAX_PRIO)
                     << l4_mword_t (L4_SCHED_MIN_PRIO) << bitmap),
                 "Failed to create scheduler");
 
-        auto thread_cap = L4::Cap<L4::Thread> (pthread_l4_cap (pthread[i]));
+            auto thread_cap
+                = L4::Cap<L4::Thread> (pthread_l4_cap (pthread[i]));
 
-        log<DEBUG> ("running client on cpu {:#b}", bitmap);
+            log<DEBUG> ("running client on cpu {:#b}", bitmap);
 
-        chksys (sched_cap->run_thread (
-            thread_cap, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
+            chksys (sched_cap->run_thread (
+                thread_cap, l4_sched_param (L4RE_MAIN_THREAD_PRIO)));
+          }
+
+        /* join pthreads */
+        for (int i = 0; i < THREAD_NUM; i++)
+          {
+            pthread_join (pthread[i], NULL);
+          }
+
+        /* generate output */
+        printf ("====   OUTPUT   ====\n[");
+        for (int i = 0; i < THREAD_NUM; i++)
+          printf ("%s\n%c", metrics_arr[i].toString ().c_str (),
+                  i == THREAD_NUM - 1 ? ' ' : ',');
+        printf ("]\n==== END OUTPUT ====\n");
+
+        delete[] metrics_arr;
+
+        return EXIT_SUCCESS;
       }
-
-    /* join threads c++*/
-    // for (std::thread &t : threads)
-    //   t.join ();
-
-    /* join pthreads */
-    for (int i = 0; i < THREAD_NUM; i++)
-      pthread_join (pthread[i], NULL);
-
-    printf ("====   OUTPUT   ====\n[");
-
-    for (int i = 0; i < THREAD_NUM; i++)
-      printf ("%s\n%c", metrics_arr[i].toString ().c_str (),
-              i == THREAD_NUM - 1 ? ' ' : ',');
-
-    printf ("]\n==== END OUTPUT ====\n");
-
-    delete[] metrics_arr;
-
-    return EXIT_SUCCESS;
-  }
-catch (L4Re::LibLog::Loggable_exception &e)
-  {
-    log<FATAL> (e);
-    return e.err_no ();
-  }
-catch (L4::Runtime_error &e)
-  {
-    log<FATAL> (e);
-    return e.err_no ();
-  }
+    catch (L4Re::LibLog::Loggable_exception &e)
+      {
+        log<FATAL> (e);
+        return e.err_no ();
+      }
+    catch (L4::Runtime_error &e)
+      {
+        log<FATAL> (e);
+        return e.err_no ();
+      }

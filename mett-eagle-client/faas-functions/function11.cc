@@ -1,32 +1,26 @@
 #include <l4/libfaas/faas>
 
 /**
- * @brief Only wait for specific time
+ * @brief Busy Loop
  *
- * This implementation is a simple function that waits for a specific amount of
- * time and returns it's own measured runtime.
+ * This implementation is a simple function that starts a busy loop for a
+ * specific amount of iterations and returns it's own measured runtime.
  *
- * @param args the time to wait for in milliseconds
- * @return std::string The measured runtime as a string
+ * @param args the amount of iterations (as string)
+ * @return std::string The measured runtime in microseconds (as string)
  */
-
-const int COUNT = 10000000;
-
-double sq_arr[COUNT];
 
 std::string
 Main (std::string args)
 {
   auto start = std::chrono::high_resolution_clock::now ();
 
-
-  for (int i = 0; i < COUNT; i++)
-    sq_arr[i] = (double)i * (double)i;
-
-  // std::this_thread::sleep_for (std::chrono::milliseconds (std::stoi(args)));
+  auto iterations = std::stoi (args);
+  double sum = 0.0;
+  for (int i = 0; i < iterations; i++)
+    sum += (double)i * (double)i;
 
   auto end = std::chrono::high_resolution_clock::now ();
-
 
   auto duration
       = std::chrono::duration_cast<std::chrono::microseconds> (end - start);

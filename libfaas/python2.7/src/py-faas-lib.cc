@@ -9,8 +9,7 @@
  * @file
  * This file contains the C++ to python translations for the faas interface.
  *
- * they can be accessed using
- *
+ * This interface can be accessed using
  * @code{.py}
  * import faas
  * @endcode
@@ -37,11 +36,6 @@
  *   ret = faas.action_invoke(name="function2", arg="hey from fn1");
  *   return ret;
  * @endcode
- *
- * @param self
- * @param args
- * @param keywds
- * @return * action*
  */
 static PyObject *
 faas_action_invoke (PyObject *self, PyObject *args, PyObject *keywds)

@@ -48,9 +48,21 @@ struct Config
 {
   /**
    * the memory limit in bytes
-   * 0 means 'no limit'
+   *
+   * Note:0 encodes'no limit'
    */
   l4_mword_t memory_limit = 0;
+
+  /**
+   * the maximum time the function may take in microseconds
+   * if this limit is reached the process will be killed
+   *
+   * Note: 0 encodes 'no limit'
+   * Note: Time measurement will be started before the worker
+   *       process creation, thus at least ~260us should be
+   *       added to the total function runtime
+   */
+  l4_uint32_t timeout_us = 0;
 };
 
 /**
