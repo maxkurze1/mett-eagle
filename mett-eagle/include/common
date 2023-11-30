@@ -37,33 +37,6 @@ enum Protocol
   // clang-format on
 };
 
-// /**
-//  * Copy paste for making it constexpr
-//  *
-//  * have a look at the original definition for more information
-//  *
-//  * @see __timeout.h
-//  */
-// L4_INLINE
-// constexpr l4_timeout_s
-// l4_timeout_from_us_constexpr (l4_uint32_t us) L4_NOTHROW
-// {
-//   l4_timeout_s t{};
-//   if (us == 0)
-//     t = L4_IPC_TIMEOUT_0;
-//   else if (us == L4_TIMEOUT_US_NEVER)
-//     t = L4_IPC_TIMEOUT_NEVER;
-//   else
-//     {
-//       int e = (31 - __builtin_clz (us)) - 9;
-//       if (e < 0)
-//         e = 0;
-//       unsigned m = us >> e;
-//       t.t = (e << 10) | m;
-//     }
-//   return t;
-// }
-
 /**
  * RPC attribute for a timeout RPC.
  *

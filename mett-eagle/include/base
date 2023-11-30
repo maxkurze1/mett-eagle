@@ -49,7 +49,7 @@ struct Config
   /**
    * the memory limit in bytes
    *
-   * Note:0 encodes'no limit'
+   * Note: 0 encodes'no limit'
    */
   l4_mword_t memory_limit = 0;
 

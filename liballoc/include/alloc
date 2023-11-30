@@ -16,11 +16,12 @@
 #pragma once
 
 #include <atomic>
-#include <string>
+#include <bit>
 #include <l4/re/cap_alloc>
 #include <l4/re/env>
 #include <l4/sys/assert.h>
 #include <l4/sys/capability>
+#include <string>
 
 namespace L4Re
 {
@@ -36,32 +37,41 @@ namespace Alloc
  * Allocator for capability slots that automatically frees the slot
  * and optionally unmaps the capability when the reference count goes
  * down to zero. Reference counting must be done manually via take()
- * and release(). The backing store for the reference counters must be
- * provided in the setup() method. The allocator can recognize
- * capability slots that are not managed by itself and does nothing on
- * such slots.
+ * and release(). The allocator can recognize capability slots that are not
+ * managed by itself and does nothing on such slots.
  *
- *
- * @note The user must ensure that the backing store is
- * zero-initialized.
  *
  * @note The user must ensure that the capability slots managed by
  * this allocator are not used by a different allocator, see setup().
  *
- * @note The operations in this class *are thread-safe*.
+ * @note The operations in this class are *thread-safe*.
  *
  * @tparam COUNTER_TYPE  The datatype used by the per-cap counter values. The
- *                   provided type need to be applicable to
- *                   std::atomic<COUNTER_TYPE>.
- * @tparam CAP_NUM   The number of capabilities that are managed by this
- *                   allocator
+ *                       provided type needs to be applicable to
+ *                       std::atomic<COUNTER_TYPE>.
+ * @tparam CAP_NUM       The number of capabilities that are managed by this
+ *                       allocator
  */
 template <typename COUNTER_TYPE = unsigned char, int CAPACITY = 4096>
 class Safe_counting_cap_alloc : public Cap_alloc
 {
 private:
+  /** array containing a counter variable for each managed capability */
   std::atomic<COUNTER_TYPE> _items[CAPACITY];
-  // std::atomic<long> _free_hint = 0;
+
+  /* this value should be set as long as the capability still references a
+   * kernel object */
+  static constexpr COUNTER_TYPE F_USED = 0x1
+                                         << (sizeof (COUNTER_TYPE) * 8 - 1);
+
+  /** index of the last capability that was allocated
+   * (might also deviate in case 2+ threads allocated at
+   * the same time an one with a lower capability than
+   * the actual *last* application overrides _last)
+   * Only used to improve the performance of allocation,
+   * should not have any impact on security */
+  std::atomic<long> _last = 0;
+  /** first capability managed by this allocator */
   const long _bias;
 
 public:
@@ -69,9 +79,11 @@ public:
    * Create a new, empty allocator.
    *
    * The allocator will manage the capability slots between `bias`
-   * and `bias` + `capacity` - 1 (inclusive). It is the
+   * (inclusive) and `bias` + `capacity` (exclusive). It is the
    * responsibility of the user to ensure that these slots are not
    * used otherwise.
+   *
+   * bias is initialised with first_free_cap + 1
    */
   Safe_counting_cap_alloc () noexcept
       : _bias (L4Re::Env::env ()->first_free_cap () + 1)
@@ -84,23 +96,33 @@ public:
       = delete;
 
   /**
-   * Allocate a new capability slot.
+   * @brief Allocate a new capability slot.
    *
-   * @return The newly allocated capability slot, invalid if the allocator
-   *         was exhausted.
+   * This will check every managed capability only ONCE.
+   * Thus if another thread releases a capability that was already checked
+   * it won't be checked again and cannot be returned.
+   *
+   * This method can be called in a loop if another thread is
+   * expected to release a capability.
+   *
+   * @return The newly allocated capability slot or an invalid capability in
+   *         case no free slot could be found
+   *
    */
   L4::Cap<void>
   alloc () noexcept
   {
     COUNTER_TYPE expected;
-    for (long i = /* _free_hint.load() */ 0; i < CAPACITY; ++i)
+    for (long start_end = _last.load (), i = (start_end + 1) % CAPACITY;
+         i != start_end; i = (i + 1) % CAPACITY)
       {
+        // expect that the capability is free
         expected = 0;
-        if (_items[i].compare_exchange_strong (expected, 1))
+        // atomically set it to used and its count to 1
+        if (_items[i].compare_exchange_strong (expected, F_USED + 1))
           {
             // successful atomic exchange -> acquired capability
-            // expected = i;
-            // _free_hint.compare_exchange_strong(expected, i+1);
+            _last = i;
             return L4::Cap<void> ((i + _bias) << L4_CAP_SHIFT);
           }
       }
@@ -116,129 +138,140 @@ public:
   }
 
   /**
-   * Increase the reference counter for the capability.
+   * @brief Increase the reference counter for the capability.
+   *
+   * If the capability is not already allocated it will try to allocate it.
+   *
+   * @note This method might fail if the capability is currently being freed by
+   *       another thread. In this case nothing happens.
    *
    * @param cap Capability, whose reference counter should be increased.
-   *
-   * If the capability was still free, it will be automatically allocated.
-   * Silently does nothing if the capability is not
-   * managed by this allocator.
    */
   void
   take (L4::Cap<void> cap) noexcept
   {
     long c;
-    if (!range_check_and_get_idx (cap, &c))
+    if (L4_UNLIKELY (!range_check_and_get_idx (cap, &c)))
       return;
 
-    _items[c]++;
+    auto current_value = _items[c].load ();
+    COUNTER_TYPE exchange;
+    do
+      {
+        // try to increase value
+        // also sets the used flag if it wasn't set previously
+        // free slots have to contains 0 thus they will be exchanged with
+        // 'used' and count = 1
+        exchange = (current_value | F_USED) + 1;
+      }
+    while (not _items[c].compare_exchange_strong (current_value, exchange));
   }
 
   /**
    * Free the capability.
    *
+   * If the capability was allocated it will not be freed.
+   *
+   * Note: If the capability is currently beeing freed by another
+   * thread this method will do nothing. The capability may still be in use
+   * after this method returned. But it is guaranteed that it will be freed.
+   *
+   *
    * @param cap  Capability to free.
    * @param task If set, task to unmap the capability from.
    * @param unmap_flags  Flags for unmap, see l4_unmap_flags_t.
-   *
-   * @pre The capability has been allocated. Calling free twice on a
-   *      capability managed by this allocator results in undefined
-   *      behaviour.
    */
   void
   free (L4::Cap<void> cap, l4_cap_idx_t task = L4_INVALID_CAP,
         unsigned unmap_flags = L4_FP_ALL_SPACES) noexcept
   {
     long c;
-    if (!range_check_and_get_idx (cap, &c))
+    if (L4_UNLIKELY (!range_check_and_get_idx (cap, &c)))
       return;
 
-    l4_assert (_items[c].load () >= 0);
+    // make sure no other method is currently freeing
+    auto current_value = _items[c].load ();
+    do
+      {
+        // if not even in use or already decreased to 0 just return
+        // in case 'used' is set and count == 0
+        // another thread is currently freeing the cap
+        if (L4_UNLIKELY (not(current_value & F_USED)
+                         || (current_value & ~F_USED) == 0))
+          return;
+      }
+    while (not _items[c].compare_exchange_strong (current_value, F_USED));
+
+    // we have set count == 0 and 'used' is still set
+    // so other threads will know we are freeing this cap
 
     if (l4_is_valid_cap (task))
       l4_task_unmap (task, cap.fpage (), unmap_flags);
 
-    // TODO compare and set are not atomic, we may loose a smaller capability
-    // index
-    // if (c < _free_hint.load ())
-    //   _free_hint = c;
-
+    // make slot available for alloc again
     _items[c] = 0;
   }
 
   /**
    * Decrease the reference counter for a capability.
    *
-   * \param cap  Capability to release.
-   * \param task If set, task to unmap the capability from.
-   * \param unmap_flags  Flags for unmap, see l4_unmap_flags_t.
+   * @param cap  Capability to release.
+   * @param task If set, task to unmap the capability from.
+   * @param unmap_flags  Flags for unmap, see l4_unmap_flags_t.
    *
-   * \pre The capability has been allocated. Calling release on a free
-   *      capability results in undefined behaviour.
-   *
-   * \return True, if the capability was freed as a result of
+   * @return True, if the capability was freed as a result of
    *         this operation. If false is returned the capability
    *         is either still in use or is not managed by this
    *         allocator.
-   *
-   * Does nothing apart from returning false if the capability is not
-   * managed by this allocator.
    */
   bool
   release (L4::Cap<void> cap, l4_cap_idx_t task = L4_INVALID_CAP,
            unsigned unmap_flags = L4_FP_ALL_SPACES) noexcept
   {
     long c;
-    if (!range_check_and_get_idx (cap, &c))
+    if (L4_UNLIKELY (!range_check_and_get_idx (cap, &c)))
       return false;
 
-    l4_assert (_items[c].load () >= 0);
+    // try to decrement until succeeded
+    auto current_value = _items[c].load ();
+    do
+      {
+        // if not even in use or already decreased to 0 just return
+        if (L4_UNLIKELY (not(current_value & F_USED)
+                         || (current_value & ~F_USED) == 0))
+          return false;
+      }
+    while (not _items[c].compare_exchange_strong (current_value,
+                                                  current_value - 1));
 
-    // subtract 1 and check if old value was 1
-    if (_items[c].fetch_sub (1) == 1)
+    // check if the decrement took the counter from 1 -> 0
+    if ((current_value & ~F_USED) == 1)
       {
         if (task != L4_INVALID_CAP)
           l4_task_unmap (task, cap.fpage (), unmap_flags);
 
-        // todo not atomic
-        // if (c < _free_hint.load ())
-        //   _free_hint = c;
+        // mark capability as free again
+        _items[c] = 0;
 
         return true;
       }
+
     return false;
   }
 
   /**
    * Return highest capability id managed by this allocator.
    */
-  long last()
+  long
+  last ()
   {
     return CAPACITY + _bias - 1;
   }
 
-  long first()
+  long
+  first ()
   {
     return _bias;
-  }
-
-  // void print()
-  // {
-  //   char bitmap[CAPACITY];
-  //   for (int i = 0; i < CAPACITY; i ++) {
-  //     bitmap[i] = _items[i] == 0 ? '0' : '1';
-  //   }
-  //   L4Re::LibLog::log<L4Re::LibLog::INFO>("alloc: {:{}s}", bitmap, CAPACITY);
-  // }
-
-  std::string print()
-  {
-    std::string s;
-    for (int i = 0; i < CAPACITY; i ++) {
-      s += std::to_string(_items[i].load());
-      s += ",";
-    }
-    return s;
   }
 
 private:

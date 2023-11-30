@@ -108,8 +108,6 @@ the loggable error is, that it can be constructed with a format string.
 #include <l4/liblog/log>
 #include <l4/fmt/core.h>
 #include <l4/liblog/loggable-exception>
-
-using L4Re::LibLog::Loggable_exception;
 using namespace L4Re::LibLog;
 
 try
