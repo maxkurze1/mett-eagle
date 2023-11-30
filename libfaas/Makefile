@@ -1,6 +1,7 @@
 PKGDIR ?= .
 L4DIR  ?= $(PKGDIR)/../../..
 
-TARGET  = include lib python3 python2.7
+TARGET  = include lib python2.7
+#python3
 
 include $(L4DIR)/mk/subdir.mk
