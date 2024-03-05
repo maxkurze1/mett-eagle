@@ -1,0 +1,3 @@
+[submodule "libpython3/contrib"]
+	path = libpython3/contrib
+	url = https://github.com/python/cpython
